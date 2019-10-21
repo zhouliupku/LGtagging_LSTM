@@ -28,17 +28,29 @@ class Page(object):
         Create a list of Record objects by parsing with self.orig_text and df
         """
         records = []
-        datas = []
+        texts = []
+        tags = []
         last_cutoff = 0
         for _, row in df.iterrows():
             name = utils.convert_to_orig(row["人名"])
             if not name in self.orig_text:
                 raise ValueError("Name {} not in original text!".format(name))
             cutoff = self.orig_text.find(name)
-            datas.append((self.orig_text[last_cutoff : cutoff], row))
+            texts.append(self.orig_text[last_cutoff:cutoff])
+            tags.append(row)
             last_cutoff = cutoff
-        for idx, data in enumerate(datas[1:]):
+        texts.append(self.orig_text[last_cutoff:])
+        for idx, data in enumerate(zip(texts[1:], tags)):
             records.append(Record(idx, data))
+        
+        #TODO:remove check
+        checkid = self.page_id % 10
+        if checkid < len(records):
+            record = records[checkid]
+            print(''.join([x.char for x in record.chars]))
+            print(''.join([x.tag for x in record.chars]))
+            print('\n')
+        
         return records
     
     def get_length(self):
@@ -64,13 +76,19 @@ class Page(object):
             
 
 class Record(object):
-    #TODO:add <S>, </S> etc
     def __init__(self, idx, data):
         self.record_id = idx
         self.orig_text = data[0]
         self.orig_tags = data[1]
-        tag_seq = self.orig_text    #TODO: create list of Tags with same length
+        # Build tag sequence
+        tag_seq = ['N' for _ in self.orig_text]
+        interested_tags = [("人名", 'R'), ("任官地點", "L"), ("任職時間", "T")]
+        for colname, tagname in interested_tags:
+            utils.modify_tag_seq(self.orig_text, tag_seq,
+                                 self.orig_tags[colname], tagname)
         self.chars = [CharSample(c, t) for c, t in zip(self.orig_text, tag_seq)]
+        self.chars = [CharSample("<S>", "<BEG>")] + self.chars
+        self.chars = self.chars + [CharSample("</S>", "<END>")]
         
     def get_orig_len(self):
         return len(self.orig_text)
