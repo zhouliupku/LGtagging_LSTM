@@ -10,9 +10,10 @@ import pandas as pd
 from DataStructures import Page
 
 def load_data(text_filename, tag_filename):
-    with open(text_filename, 'r', encoding='utf8') as txtfile:
+    with open(text_filename, 'r', encoding="utf8") as txtfile:
         lines = txtfile.readlines()
     df = pd.read_excel(tag_filename)
+    print(len(df))
     pages = []
     for line in lines:
         if '【' not in line or '】' not in line:
@@ -21,7 +22,7 @@ def load_data(text_filename, tag_filename):
     return pages
             
 if __name__ == "__main__":
-    DATAPATH = os.path.join(os.getcwd(), 'LSTMdata')
-    pages = load_data(os.path.join(DATAPATH, 'textTraining1.txt'),
-                      os.path.join(DATAPATH, 'tagTraining1.xlsx'))
+    DATAPATH = os.path.join(os.getcwd(), "LSTMdata")
+    pages = load_data(os.path.join(DATAPATH, "textTraining1.txt"),
+                      os.path.join(DATAPATH, "tagTraining1.xlsx"))
     print(len(pages))
