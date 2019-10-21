@@ -49,9 +49,22 @@ class Page(object):
     
     def get_eos_markers(self):
         raise NotImplementedError()
+        
+    def get_x(self):
+        """
+        get x sequence as tensor
+        """
+        raise NotImplementedError()
+        
+    def get_y(self):
+        """
+        get y sequence as tensor
+        """
+        raise NotImplementedError()
             
 
 class Record(object):
+    #TODO:add <S>, </S> etc
     def __init__(self, idx, data):
         self.record_id = idx
         self.orig_text = data[0]
@@ -59,8 +72,36 @@ class Record(object):
         tag_seq = self.orig_text    #TODO: create list of Tags with same length
         self.chars = [CharSample(c, t) for c, t in zip(self.orig_text, tag_seq)]
         
+    def get_orig_len(self):
+        return len(self.orig_text)
+        
+    def get_x(self):
+        """
+        get x sequence as tensor
+        """
+        raise NotImplementedError()
+        
+    def get_y(self):
+        """
+        get y sequence as tensor
+        """
+        raise NotImplementedError()
+        
     
 class CharSample(object):
     def __init__(self, char, tag):
-        self.char = char
+        self.char = char    # both string
         self.tag = tag
+        
+    def get_char(self):
+        return self.char
+    
+    def get_tag(self):
+        return self.tag
+    
+    def get_x(self, encoder):
+        return encoder.encode(self.char)
+    
+    def get_y(self, encoder):
+        return encoder.encode(self.tag)
+
