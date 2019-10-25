@@ -11,7 +11,8 @@ import pickle
 
 class LSTMTagger(nn.Module):
 
-    def __init__(self, embedding_dim, hidden_dim, tagset_size,
+    def __init__(self, embedding_dim, hidden_dim, tag_dict,
+                 bidirectional=False,
                  embedding_filename="polyglot-zh_char.pkl"):
         super(LSTMTagger, self).__init__()
        
@@ -20,10 +21,16 @@ class LSTMTagger(nn.Module):
         self.word_embeddings = nn.Embedding(len(vocab), embedding_dim)
         self.word_id = {v:idx for idx, v in enumerate(vocab)}
         self.word_embeddings.weight.data.copy_(torch.from_numpy(vectors))
+        self.tag_dict = tag_dict
+        self.tagix_to_tag = {v:k for k,v in tag_dict.items()}
        
         self.hidden_dim = hidden_dim
-        self.lstm = nn.LSTM(embedding_dim, hidden_dim, bidirectional=True)
-        self.hidden2tag = nn.Linear(hidden_dim*2, tagset_size)
+        self.lstm = nn.LSTM(embedding_dim, hidden_dim, bidirectional=bidirectional)
+        tagset_size = len(self.tag_dict)
+        if bidirectional:
+            self.hidden2tag = nn.Linear(hidden_dim*2, tagset_size)
+        else:
+            self.hidden2tag = nn.Linear(hidden_dim, tagset_size)
 
     def forward(self, sentence):
         embeds = self.word_embeddings(sentence)
@@ -35,4 +42,10 @@ class LSTMTagger(nn.Module):
     def prepare_sequence(self, seq):
         idxs = [self.word_id[w] if w in self.word_id.keys() else self.word_id["<UNK>"] for w in seq]
         return torch.tensor(idxs, dtype=torch.long)
+    
+    def prepare_targets(self, tags):
+        return torch.tensor([self.tag_dict[w] for w in tags], dtype=torch.long)
+    
+    def convert_results(self, tagix):
+        return "".join([self.tagix_to_tag[t.item()] for t in tagix])
 

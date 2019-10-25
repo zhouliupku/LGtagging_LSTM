@@ -12,6 +12,7 @@ from torch import nn, optim
 
 from DataStructures import Page
 from model import LSTMTagger
+import utils
 
 def load_data(text_filename, tag_filename):
     with open(text_filename, 'r', encoding="utf8") as txtfile:
@@ -33,33 +34,27 @@ if __name__ == "__main__":
     pages = load_data(os.path.join(DATAPATH, "textTraining1.txt"),
                       os.path.join(DATAPATH, "tagTraining1.xlsx"))
     
-    print(pages[0].get_x())
-    print(pages[0].get_y())
-    print(len(pages[0].get_x()))
-    print(len(pages[0].get_y()))
+    print("Loaded {} pages.".format(len(pages)))
     
-    
-    tag_to_ix = {"B": 0, "N": 1}
-    tagix_to_tag = {v:k for k,v in tag_to_ix.items()}
-    
-    def print_results(tagix):
-        print("".join([tagix_to_tag[t.item()] for t in tagix]))
-       
+    # Model hyper-parameter definition
+    page_tag_dict = {"B": 0, "N": 1}
     EMBEDDING_DIM = 64          # depending on pre-trained word embedding model
     HIDDEN_DIM = 8
-    model = LSTMTagger(EMBEDDING_DIM, HIDDEN_DIM, len(tag_to_ix))
+    page_to_sent_model = LSTMTagger(EMBEDDING_DIM, HIDDEN_DIM, page_tag_dict)
     loss_function = nn.NLLLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.3)
+    optimizer = optim.SGD(page_to_sent_model.parameters(), lr=0.3)
     
-    training_data = [(p.get_x(), p.get_y()) for p in pages]
-    
-    for epoch in range(2000):
+    # Step 1. Train model to parse pages into sentences
+    training_data = [(p.get_x(), p.get_y()) for p in pages]    
+    for epoch in range(1000):
         print(epoch)
-        for sentence, tags in training_data:
-            model.zero_grad()   # clear accumulated gradient before each instance
-            sentence_in = model.prepare_sequence(sentence)
-            targets = torch.tensor([tag_to_ix[w] for w in tags], dtype=torch.long)
-            tag_scores = model(sentence_in)
+        #TODO: use full sample
+        for sentence, tags in training_data[:10]:
+            page_to_sent_model.zero_grad()   # clear accumulated gradient before each instance
+            #TODO: see whether '○' is convert as <UNK>
+            sentence_in = page_to_sent_model.prepare_sequence(sentence)
+            targets = page_to_sent_model.prepare_targets(tags)
+            tag_scores = page_to_sent_model(sentence_in)
             loss = loss_function(tag_scores, targets)
             loss.backward()
             optimizer.step()
@@ -68,7 +63,10 @@ if __name__ == "__main__":
             print("Loss = {}".format(loss.item()))
             with torch.no_grad():
                 for training_sent, _ in training_data[:3]:
-                    inputs = model.prepare_sequence(training_sent)
-                    tag_scores = model(inputs)
-                    print_results(tag_scores.max(dim=1).indices)
+                    inputs = page_to_sent_model.prepare_sequence(training_sent)
+                    tag_scores = page_to_sent_model(inputs)
+                    res = page_to_sent_model.convert_results(tag_scores.max(dim=1).indices)
+                    print(res)
+                    for sent in utils.parse(training_sent, res):
+                        print(sent)
     
