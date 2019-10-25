@@ -14,7 +14,7 @@ from DataStructures import Page
 from model import LSTMTagger
 import utils
 
-def load_data(text_filename, tag_filename):
+def load_training_data(text_filename, tag_filename):
     with open(text_filename, 'r', encoding="utf8") as txtfile:
         lines = txtfile.readlines()
     df = pd.read_excel(tag_filename)
@@ -28,11 +28,13 @@ def load_data(text_filename, tag_filename):
 
             
 if __name__ == "__main__":
+    # I/O settings
     DATAPATH = os.path.join(os.getcwd(), "LSTMdata")
-    torch.manual_seed(1)
+    MODEL_PATH = os.path.join(os.getcwd(), "models")
+    PAGE_MODEL_PATH = os.path.join(MODEL_PATH, "page_model.pt")
     
-    pages = load_data(os.path.join(DATAPATH, "textTraining1.txt"),
-                      os.path.join(DATAPATH, "tagTraining1.xlsx"))
+    pages = load_training_data(os.path.join(DATAPATH, "textTraining1.txt"),
+                               os.path.join(DATAPATH, "tagTraining1.xlsx"))
     
     print("Loaded {} pages.".format(len(pages)))
     
@@ -44,9 +46,16 @@ if __name__ == "__main__":
     loss_function = nn.NLLLoss()
     optimizer = optim.SGD(page_to_sent_model.parameters(), lr=0.3)
     
+    # Load model if it was previously saved
+    if os.path.exists(PAGE_MODEL_PATH):
+        page_to_sent_model.load_state_dict(torch.load(PAGE_MODEL_PATH))
+        page_to_sent_model.eval()
+    
+    torch.manual_seed(1)
+    
     # Step 1. Train model to parse pages into sentences
     training_data = [(p.get_x(), p.get_y()) for p in pages]    
-    for epoch in range(1000):
+    for epoch in range(50):
         print(epoch)
         #TODO: use full sample
         for sentence, tags in training_data[:10]:
@@ -58,7 +67,7 @@ if __name__ == "__main__":
             loss = loss_function(tag_scores, targets)
             loss.backward()
             optimizer.step()
-        if epoch % 2 == 0:
+        if epoch % 10 == 0:
             print("Epoch {}".format(epoch))
             print("Loss = {}".format(loss.item()))
             with torch.no_grad():
@@ -69,4 +78,6 @@ if __name__ == "__main__":
                     print(res)
                     for sent in utils.parse(training_sent, res):
                         print(sent)
+    # After training, save trained model
+    torch.save(page_to_sent_model.state_dict(), PAGE_MODEL_PATH)
     
