@@ -38,27 +38,35 @@ if __name__ == "__main__":
     
     print("Loaded {} pages.".format(len(pages)))
     
+    # Training settings
+    N_EPOCH = 50
+    N_CHECKPOINT = 10
+    LEARNING_RATE = 0.3
+    N_TRAIN = 20
+    TRAIN_FROM_SCRATCH = True
+    
     # Model hyper-parameter definition
     page_tag_dict = {"B": 0, "N": 1}
     EMBEDDING_DIM = 64          # depending on pre-trained word embedding model
     HIDDEN_DIM = 8
     page_to_sent_model = LSTMTagger(EMBEDDING_DIM, HIDDEN_DIM, page_tag_dict)
     loss_function = nn.NLLLoss()
-    optimizer = optim.SGD(page_to_sent_model.parameters(), lr=0.3)
+    optimizer = optim.SGD(page_to_sent_model.parameters(), lr=LEARNING_RATE)
     
-    # Load model if it was previously saved
-    if os.path.exists(PAGE_MODEL_PATH):
+    # Load model if it was previously saved and want to continue
+    if os.path.exists(PAGE_MODEL_PATH) and not TRAIN_FROM_SCRATCH:
         page_to_sent_model.load_state_dict(torch.load(PAGE_MODEL_PATH))
         page_to_sent_model.eval()
     
     torch.manual_seed(1)
     
     # Step 1. Train model to parse pages into sentences
-    training_data = [(p.get_x(), p.get_y()) for p in pages]    
-    for epoch in range(50):
+    training_data = [(p.get_x(), p.get_y()) for p in pages[:N_TRAIN]]
+    test_data = [p.get_x() for p in pages[N_TRAIN:]]
+    for epoch in range(N_EPOCH):
         print(epoch)
         #TODO: use full sample
-        for sentence, tags in training_data[:10]:
+        for sentence, tags in training_data:
             page_to_sent_model.zero_grad()   # clear accumulated gradient before each instance
             #TODO: see whether '○' is convert as <UNK>
             sentence_in = page_to_sent_model.prepare_sequence(sentence)
@@ -67,16 +75,24 @@ if __name__ == "__main__":
             loss = loss_function(tag_scores, targets)
             loss.backward()
             optimizer.step()
-        if epoch % 10 == 0:
+        if epoch % N_CHECKPOINT == 0:
             print("Epoch {}".format(epoch))
             print("Loss = {}".format(loss.item()))
             with torch.no_grad():
+                print("Training set:")
                 for training_sent, _ in training_data[:3]:
                     inputs = page_to_sent_model.prepare_sequence(training_sent)
                     tag_scores = page_to_sent_model(inputs)
                     res = page_to_sent_model.convert_results(tag_scores.max(dim=1).indices)
                     print(res)
                     for sent in utils.parse(training_sent, res):
+                        print(sent)
+                print("Testing set:")
+                for test_sent in test_data[:3]:
+                    inputs = page_to_sent_model.prepare_sequence(test_sent)
+                    tag_scores = page_to_sent_model(inputs)
+                    res = page_to_sent_model.convert_results(tag_scores.max(dim=1).indices)
+                    for sent in utils.parse(test_sent, res):
                         print(sent)
     # After training, save trained model
     torch.save(page_to_sent_model.state_dict(), PAGE_MODEL_PATH)
