@@ -41,38 +41,32 @@ class Page(object):
             last_cutoff = cutoff
         texts.append(self.orig_text[last_cutoff:])
         for idx, data in enumerate(zip(texts[1:], tags)):
-            records.append(Record(idx, data))
-        
-        #TODO:remove check
-        checkid = self.page_id % 10
-        if checkid < len(records):
-            record = records[checkid]
-            print(''.join([x.char for x in record.chars]))
-            print(''.join([x.tag for x in record.chars]))
-            print('\n')
-        
+            records.append(Record(idx, data))        
         return records
     
     def get_length(self):
         return len(self.records)
-    
-    def get_orig_text(self):
-        return self.orig_text
-    
-    def get_eos_markers(self):
-        raise NotImplementedError()
         
     def get_x(self):
         """
         get x sequence as tensor
         """
-        raise NotImplementedError()
+        return list(''.join([r.get_orig_text() for r in self.records]))
         
     def get_y(self):
         """
         get y sequence as tensor
         """
-        raise NotImplementedError()
+        tags = ['N' for i in range(len(self.get_x()))]
+        target = 0
+        tags[0] = 'B'
+        for record in self.records[:-1]:
+            length = record.get_orig_len()
+            target += length
+            tags[target] = 'B'
+        return tags
+        
+
             
 
 class Record(object):
@@ -92,6 +86,9 @@ class Record(object):
         
     def get_orig_len(self):
         return len(self.orig_text)
+    
+    def get_orig_text(self):
+        return self.orig_text
         
     def get_x(self):
         """
