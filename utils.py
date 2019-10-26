@@ -34,15 +34,3 @@ def modify_tag_seq(text, tag_seq, keyword, tagname):
     
 def is_empty_cell(x):
     return (not isinstance(x, str)) or len(x) == 0
-
-def parse(page, tags):
-    res = []
-    assert len(page) == len(tags)
-    current_sent = ""
-    for char, tag in zip(page, tags):
-        if tag == 'B':
-            res.append(current_sent)
-            current_sent = ""
-        current_sent += char 
-    res.append(current_sent)
-    return res

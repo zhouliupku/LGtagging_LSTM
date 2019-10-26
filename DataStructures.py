@@ -64,10 +64,19 @@ class Page(object):
             text = self.orig_text[head_char_idx : (head_char_idx + sent_len)]
             self.records.append(Record(record_idx, (text, None)))
             head_char_idx += sent_len
+            record_idx += 1
         
         # Step 2. Set flag to indicate that separation is done
         self.is_sentence_separated = True
         
+    def tag_records(self, tag_sequences):
+        for record, tag_seq in zip(self.get_records(), tag_sequences):
+            record.set_tag(tag_seq)
+            
+    def print_sample_records(self, n_sample):
+        print("Page {}:".format(self.page_id))
+        for r in self.records[0:n_sample]:
+            r.print_tag_results()
         
     def get_x(self, encoder):
         """
@@ -86,15 +95,14 @@ class Page(object):
             eos_idx += length
             tags[eos_idx] = 'S'
         return tags
-        
 
             
 
 class Record(object):
     def __init__(self, idx, data):
         """
-        idx is the record id indicating the index of record in the page it belongs to
-        data is a tuple of (text, tags)
+        idx: record id indicating the index of record in the page it belongs to
+        data: tuple of (text, tags)
         """
         self.record_id = idx
         self.orig_text = data[0]        # as a string without <S>, </S>
@@ -120,6 +128,17 @@ class Record(object):
     
     def get_orig_text(self):
         return self.orig_text
+    
+    def set_tag(self, tag_seq):
+        assert len(tag_seq) == len(self.chars)
+        for i in range(1, len(tag_seq) - 1):
+            self.chars[i].set_tag(tag_seq[i])
+        self.is_tagged = True
+        
+    def print_tag_results(self):
+        print("Record {}:".format(self.record_id))
+        print(''.join([cs.get_char() for cs in self.chars[1:-1]]))
+        print(''.join([cs.get_tag() for cs in self.chars[1:-1]]))
         
     def get_x(self, encoder):
         """
@@ -145,5 +164,6 @@ class CharSample(object):
     def get_tag(self):
         return self.tag
     
-   
+    def set_tag(self, tag):
+        self.tag = tag
 

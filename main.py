@@ -13,7 +13,6 @@ from torch import nn, optim
 from DataStructures import Page
 from model import LSTMTagger
 from Encoders import XEncoder, YEncoder
-import utils
 
 def load_training_data(text_filename, tag_filename, mode):
     with open(text_filename, 'r', encoding="utf8") as txtfile:
@@ -33,7 +32,6 @@ def train(training_data, model, optimizer, loss_function):
     '''
     #TODO: move into models
     for epoch in range(N_EPOCH):    #TODO: training settings as a class
-        print(epoch)
         for sentence, tags in training_data:
             model.zero_grad()   # clear accumulated gradient before each instance
             targets = model.prepare_targets(tags)
@@ -50,7 +48,6 @@ def evaluate(model, test_data):
     """
     Take model and test data (list of strings), return list of list of tags
     """
-    print("Testing set:")
     result_list = []
     with torch.no_grad():
         for test_sent in test_data:
@@ -59,11 +56,6 @@ def evaluate(model, test_data):
             tag_scores = model(test_sent)
             res = model.convert_results(tag_scores.max(dim=1).indices)
             result_list.append(res)
-    #        if tag_only:
-    #            result_list.extend([list(sent) for sent in utils.parse(test_sent, res)])
-            print(res)
-            #TODO: fix print so as not to print tensor
-            print(test_sent)
         return result_list
 
       
@@ -77,16 +69,16 @@ if __name__ == "__main__":
         
     # Training settings
     N_EPOCH = 30
-    N_CHECKPOINT = 10
-    LEARNING_RATE = 0.3
-    N_TRAIN = 15
+    N_CHECKPOINT = 5
+    LEARNING_RATE = 0.2
+    N_TRAIN = 20
     TRAIN_FROM_SCRATCH = True
     
     # Model hyper-parameter definition
     page_tag_dict = {"S": 0, "N": 1}
     sent_tag_dict = {"N": 0, "R": 1, "L": 2, "T": 3, "<BEG>": 4, "<END>": 5}
     EMBEDDING_DIM = 64          # depending on pre-trained word embedding model
-    HIDDEN_DIM = 6
+    HIDDEN_DIM = 8
     char_encoder = XEncoder(EMBEDDING_DIM, EMBEDDING_PATH)
     page_to_sent_model = LSTMTagger(EMBEDDING_DIM, HIDDEN_DIM, page_tag_dict )
     sent_to_tag_model = LSTMTagger(EMBEDDING_DIM, HIDDEN_DIM, sent_tag_dict, bidirectional=True)
@@ -142,6 +134,9 @@ if __name__ == "__main__":
             if tag == 'S':
                 parsed_sent_len.append(current_len)
                 current_len = 0
+        # in case last char is not tagged as 'S'
+        if current_len > 0:
+            parsed_sent_len.append(current_len)
         parsed_sent_len_for_pages.append(parsed_sent_len)
     sent_to_tag_test_data = []
     for p, pl in zip(pages_test, parsed_sent_len_for_pages):
@@ -151,3 +146,10 @@ if __name__ == "__main__":
             
     # Step 2. using sent_to_tag_model, tag each sentence
     tagged_sent = evaluate(sent_to_tag_model, sent_to_tag_test_data)
+    assert len(tagged_sent) == sum([len(p.get_records()) for p in pages_test])
+    for p in pages_test:
+        num_records = len(p.get_records())
+        p.tag_records(tagged_sent[:num_records])
+        tagged_sent = tagged_sent[num_records:]
+        p.print_sample_records(2)
+    
