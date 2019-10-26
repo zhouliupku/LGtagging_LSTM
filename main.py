@@ -57,7 +57,7 @@ def train(training_data, model, optimizer, loss_function):
                
     return model
 
-def evaluate(model, test_data):
+def evaluate(model, test_data, tag_only=False):
     print("Testing set:")
     result_list = []
     for test_sent in test_data:
@@ -66,7 +66,8 @@ def evaluate(model, test_data):
         inputs = model.prepare_sequence(test_sent)
         tag_scores = model(inputs)
         res = model.convert_results(tag_scores.max(dim=1).indices)
-        result_list.extend([list(sent) for sent in utils.parse(test_sent, res)])
+        if tag_only:
+            result_list.extend([list(sent) for sent in utils.parse(test_sent, res)])
         print(res)
         print(test_sent)
     return result_list
@@ -84,17 +85,17 @@ if __name__ == "__main__":
     print("Loaded {} pages.".format(len(pages)))
     
     # Training settings
-    N_EPOCH = 100
+    N_EPOCH = 30
     N_CHECKPOINT = 10
     LEARNING_RATE = 0.3
-    N_TRAIN = 20
+    N_TRAIN = 15
     TRAIN_FROM_SCRATCH = True
     
     # Model hyper-parameter definition
     page_tag_dict = {"B": 0, "N": 1}
     sent_tag_dict = {"N": 0, "R": 1, "L": 2, "T": 3, "<BEG>": 4, "<END>": 5}
     EMBEDDING_DIM = 64          # depending on pre-trained word embedding model
-    HIDDEN_DIM = 8
+    HIDDEN_DIM = 6
     page_to_sent_model = LSTMTagger(EMBEDDING_DIM, HIDDEN_DIM, page_tag_dict )
     sent_to_tag_model = LSTMTagger(EMBEDDING_DIM, HIDDEN_DIM, sent_tag_dict, bidirectional=True)
     loss_function = nn.NLLLoss()
@@ -120,10 +121,10 @@ if __name__ == "__main__":
         for r in p.get_records():
             sent_to_tag_training_data.append((r.get_x(), r.get_y()))
     
-    sent_to_tag_test_data = []
-    for p in pages[N_TRAIN:]:
-        for r in p.get_records():
-            sent_to_tag_test_data.append(r.get_x())
+#    sent_to_tag_test_data = []
+#    for p in pages[N_TRAIN:]:
+#        for r in p.get_records():
+#            sent_to_tag_test_data.append(r.get_x())
     sent_to_tag_model = train(sent_to_tag_training_data, sent_to_tag_model, 
                               tag_optimizer, loss_function)
     
@@ -132,5 +133,6 @@ if __name__ == "__main__":
     torch.save(sent_to_tag_model.state_dict(), TAG_MODEL_PATH)
     
     # Evaluate on test set
-    split_sent = evaluate(page_to_sent_model, page_to_sent_test_data)
+    split_sent = evaluate(page_to_sent_model, page_to_sent_test_data, tag_only=True)
+    split_sent = [["<S>"] + sent + ["</S>"] for sent in split_sent]
     tagged_sent = evaluate(sent_to_tag_model, split_sent)
