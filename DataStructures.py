@@ -15,13 +15,18 @@ class Page(object):
         subdf = df[df["Page No."] == self.page_id]
         if mode == "train":
             self.records = self.create_records(subdf)
+            self.is_sentence_separated = True
         elif mode == "test":
             self.records = []
+            self.is_sentence_separated = False
         else:
             raise ValueError("Unsupported mode:" + str(mode))
             
     def get_text(self):
-        return self.orig_text
+        if self.is_sentence_separated:
+            return list(''.join([r.get_orig_text() for r in self.records]))
+        else:
+            return list(self.orig_text)
     
     def create_records(self, df):
         """
@@ -47,27 +52,39 @@ class Page(object):
     def get_records(self):
         return self.records
     
-    def get_length(self):
-        return len(self.records)
+    def separate_sentence(self, parsed_sent_len):
+        """
+        Separate page to sentences according to parsed_sent_len, list of int
+        """
+        # Step 1. fill self.records
+        assert len(self.orig_text) == sum(parsed_sent_len)
+        record_idx = 0
+        head_char_idx = 0
+        for sent_len in parsed_sent_len:
+            text = self.orig_text[head_char_idx : (head_char_idx + sent_len)]
+            self.records.append(Record(record_idx, (text, None)))
+            head_char_idx += sent_len
         
-    def get_x(self):
+        # Step 2. Set flag to indicate that separation is done
+        self.is_sentence_separated = True
+        
+        
+    def get_x(self, encoder):
         """
-        get x sequence as tensor
+        get x sequence as tensor given encoder
         """
-        #TODO: change to tensor
-        return list(''.join([r.get_orig_text() for r in self.records]))
+        return encoder.encode(self.get_text())
         
     def get_y(self):
         """
         get y sequence as tensor
         """
-        tags = ['N' for i in range(len(self.get_x()))]
-        target = 0
-        tags[0] = 'B'
-        for record in self.records[:-1]:
+        tags = ['N' for t in self.get_text()]
+        eos_idx = -1
+        for record in self.records:
             length = record.get_orig_len()
-            target += length
-            tags[target] = 'B'
+            eos_idx += length
+            tags[eos_idx] = 'S'
         return tags
         
 
@@ -75,15 +92,25 @@ class Page(object):
 
 class Record(object):
     def __init__(self, idx, data):
+        """
+        idx is the record id indicating the index of record in the page it belongs to
+        data is a tuple of (text, tags)
+        """
         self.record_id = idx
         self.orig_text = data[0]        # as a string without <S>, </S>
         self.orig_tags = data[1]        # as single row of pd.df
         # Build tag sequence
         tag_seq = ['N' for _ in self.orig_text]
         interested_tags = [("人名", 'R'), ("任官地點", "L"), ("任職時間", "T")]
-        for colname, tagname in interested_tags:
-            utils.modify_tag_seq(self.orig_text, tag_seq,
-                                 self.orig_tags[colname], tagname)
+        if self.orig_tags is None:
+            # when tags are not provided at initialization, set flag
+            self.is_tagged = False
+        else:
+            # if provided, modify tag_seq and set flag
+            for colname, tagname in interested_tags:
+                utils.modify_tag_seq(self.orig_text, tag_seq,
+                                     self.orig_tags[colname], tagname)
+            self.is_tagged = True
         self.chars = [CharSample(c, t) for c, t in zip(self.orig_text, tag_seq)]
         self.chars = [CharSample("<S>", "<BEG>")] + self.chars
         self.chars = self.chars + [CharSample("</S>", "<END>")]
@@ -94,11 +121,11 @@ class Record(object):
     def get_orig_text(self):
         return self.orig_text
         
-    def get_x(self):
+    def get_x(self, encoder):
         """
         get x sequence as tensor
         """
-        return [cs.get_char() for cs in self.chars]
+        return encoder.encode([cs.get_char() for cs in self.chars])
         
     def get_y(self):
         """
