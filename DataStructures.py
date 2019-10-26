@@ -44,6 +44,9 @@ class Page(object):
             records.append(Record(idx, data))        
         return records
     
+    def get_records(self):
+        return self.records
+    
     def get_length(self):
         return len(self.records)
         
@@ -51,6 +54,7 @@ class Page(object):
         """
         get x sequence as tensor
         """
+        #TODO: change to tensor
         return list(''.join([r.get_orig_text() for r in self.records]))
         
     def get_y(self):
@@ -72,8 +76,8 @@ class Page(object):
 class Record(object):
     def __init__(self, idx, data):
         self.record_id = idx
-        self.orig_text = data[0]
-        self.orig_tags = data[1]
+        self.orig_text = data[0]        # as a string without <S>, </S>
+        self.orig_tags = data[1]        # as single row of pd.df
         # Build tag sequence
         tag_seq = ['N' for _ in self.orig_text]
         interested_tags = [("人名", 'R'), ("任官地點", "L"), ("任職時間", "T")]
@@ -94,13 +98,13 @@ class Record(object):
         """
         get x sequence as tensor
         """
-        raise NotImplementedError()
+        return [cs.get_char() for cs in self.chars]
         
     def get_y(self):
         """
         get y sequence as tensor
         """
-        raise NotImplementedError()
+        return [cs.get_tag() for cs in self.chars]
         
     
 class CharSample(object):
@@ -114,9 +118,5 @@ class CharSample(object):
     def get_tag(self):
         return self.tag
     
-    def get_x(self, encoder):
-        return encoder.encode(self.char)
-    
-    def get_y(self, encoder):
-        return encoder.encode(self.tag)
+   
 
