@@ -8,7 +8,7 @@ Created on Sun Oct 20 22:43:13 2019
 import os
 import torch
 import pandas as pd
-from torch import nn, optim
+from torch import optim
 
 from DataStructures import Page
 from model import LSTMTagger
@@ -29,37 +29,6 @@ def load_data(text_filename, tag_filename, mode):
         pages.append(Page(line, df, mode, interested_tag_tuples))
     return pages
 
-def train(training_data, model, optimizer, loss_function):
-    '''
-    model is modifiable
-    '''
-    #TODO: move into models
-    for epoch in range(N_EPOCH):
-        for sentence, targets in training_data:
-            model.zero_grad()   # clear accumulated gradient before each instance
-            tag_scores = model(sentence)
-            loss = loss_function(tag_scores, targets)
-            loss.backward(retain_graph=True)
-            optimizer.step()
-        if epoch % N_CHECKPOINT == 0:
-            print("Epoch {}".format(epoch))
-            print("Loss = {}".format(loss.item()))
-    return model
-
-def evaluate(model, test_data, y_encoder):
-    """
-    Take model and test data (list of strings), return list of list of tags
-    """
-    result_list = []
-    with torch.no_grad():
-        for test_sent in test_data:
-            if len(test_sent) == 0:
-                continue
-            tag_scores = model(test_sent)
-            res = y_encoder.decode(tag_scores.max(dim=1).indices)
-            result_list.append(res)
-        return result_list
-
       
 if __name__ == "__main__":
     #TODO: argparse
@@ -77,6 +46,7 @@ if __name__ == "__main__":
     LEARNING_RATE = 0.2
     N_TRAIN = 15
     TRAIN_FROM_SCRATCH = False
+    NEED_SAVE_MODEL = False
     EOS_TAG = 'S'
     
     # Model hyper-parameter definition
@@ -91,8 +61,6 @@ if __name__ == "__main__":
     page_to_sent_model = LSTMTagger(EMBEDDING_DIM, HIDDEN_DIM, page_tag_encoder.get_tag_dim())
     sent_to_tag_model = LSTMTagger(EMBEDDING_DIM, HIDDEN_DIM, 
                                    sent_tag_encoder.get_tag_dim(), bidirectional=True)
-    sent_loss_function = nn.NLLLoss()
-    tag_loss_function = nn.NLLLoss()
     sent_optimizer = optim.SGD(page_to_sent_model.parameters(), lr=LEARNING_RATE)
     tag_optimizer = optim.SGD(sent_to_tag_model.parameters(), lr=LEARNING_RATE)
     
@@ -113,33 +81,35 @@ if __name__ == "__main__":
         sent_to_tag_model.load_state_dict(torch.load(TAG_MODEL_PATH))
         sent_to_tag_model.eval()
     
-    
     # Training
-    # Step 1. Train model to parse pages into sentences
+    # Step 1. Data preparation
     torch.manual_seed(1)
     page_to_sent_training_data = [(p.get_x(char_encoder), 
                                    p.get_y(page_tag_encoder)) for p in pages_train]
     page_to_sent_test_data = [p.get_x(char_encoder) for p in pages_test]
-#    page_to_sent_model = train(page_to_sent_training_data, page_to_sent_model,
-#                               sent_optimizer, sent_loss_function)
-    
-    # Step 2. Train model to tag sentences
     sent_to_tag_training_data = []
     for p in pages_train:
         for r in p.get_records():
             sent_to_tag_training_data.append((r.get_x(char_encoder), 
                                               r.get_y(sent_tag_encoder)))
-#    sent_to_tag_model = train(sent_to_tag_training_data, sent_to_tag_model, 
-#                              tag_optimizer, tag_loss_function)
+    
+    # Step 2. Model training
+    # 2.a Train model to parse pages into sentences
+    page_to_sent_model.train(page_to_sent_training_data, sent_optimizer, "NLL",
+                             N_EPOCH, N_CHECKPOINT)
+    # 2.b Train model to tag sentences
+    sent_to_tag_model.train(sent_to_tag_training_data, tag_optimizer, "NLL",
+                            N_EPOCH, N_CHECKPOINT)
     
     # Save models
-#    torch.save(page_to_sent_model.state_dict(), PAGE_MODEL_PATH)
-#    torch.save(sent_to_tag_model.state_dict(), TAG_MODEL_PATH)
+    if NEED_SAVE_MODEL:
+        torch.save(page_to_sent_model.state_dict(), PAGE_MODEL_PATH)
+        torch.save(sent_to_tag_model.state_dict(), TAG_MODEL_PATH)
     
     # Evaluate on test set
     # Step 1. using page_to_sent_model, parse pages to sentences
-    tag_seq_list = evaluate(page_to_sent_model, page_to_sent_test_data, 
-                            page_tag_encoder)
+    tag_seq_list = page_to_sent_model.evaluate(page_to_sent_test_data, 
+                                               page_tag_encoder)
     sent_to_tag_test_data = []
     for p, pl in zip(pages_test, get_sent_len_for_pages(tag_seq_list, EOS_TAG)):
         p.separate_sentence(pl)
@@ -147,8 +117,8 @@ if __name__ == "__main__":
             sent_to_tag_test_data.append(r.get_x(char_encoder))
             
     # Step 2. using sent_to_tag_model, tag each sentence
-    tagged_sent = evaluate(sent_to_tag_model, sent_to_tag_test_data,
-                           sent_tag_encoder)
+    tagged_sent = sent_to_tag_model.evaluate(sent_to_tag_test_data,
+                                             sent_tag_encoder)
     assert len(tagged_sent) == sum([len(p.get_records()) for p in pages_test])
     for p in pages_test:
         num_records = len(p.get_records())
@@ -163,4 +133,3 @@ if __name__ == "__main__":
             tagged_result = tagged_result.append(r.get_tag_res_dict(interested_tag_tuples),
                                                  ignore_index=True)
     tagged_result.to_excel(os.path.join(OUTPUT_PATH, "test.xlsx"), index=False)
-    
