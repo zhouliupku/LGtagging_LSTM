@@ -12,72 +12,142 @@ from torch import nn, optim
 
 from DataStructures import Page
 from model import LSTMTagger
-import utils
+from Encoders import XEncoder, YEncoder
+from utils import get_sent_len_for_pages
 
-def load_training_data(text_filename, tag_filename):
+def load_data(text_filename, tag_filename, mode):
     with open(text_filename, 'r', encoding="utf8") as txtfile:
         lines = txtfile.readlines()
-    df = pd.read_excel(tag_filename)
-    print(len(df))
+    if mode == "train":
+        df = pd.read_excel(tag_filename)
+    else:
+        df = None
     pages = []
     for line in lines:
         if '【' not in line or '】' not in line:
             continue
-        pages.append(Page(line, df, "train"))
+        pages.append(Page(line, df, mode, interested_tag_tuples))
     return pages
 
-            
+def train(training_data, model, optimizer, loss_function):
+    '''
+    model is modifiable
+    '''
+    #TODO: move into models
+    for epoch in range(N_EPOCH):
+        for sentence, targets in training_data:
+            model.zero_grad()   # clear accumulated gradient before each instance
+            tag_scores = model(sentence)
+            loss = loss_function(tag_scores, targets)
+            loss.backward(retain_graph=True)
+            optimizer.step()
+        if epoch % N_CHECKPOINT == 0:
+            print("Epoch {}".format(epoch))
+            print("Loss = {}".format(loss.item()))
+    return model
+
+def evaluate(model, test_data, y_encoder):
+    """
+    Take model and test data (list of strings), return list of list of tags
+    """
+    result_list = []
+    with torch.no_grad():
+        for test_sent in test_data:
+            if len(test_sent) == 0:
+                continue
+            tag_scores = model(test_sent)
+            res = y_encoder.decode(tag_scores.max(dim=1).indices)
+            result_list.append(res)
+        return result_list
+
+      
 if __name__ == "__main__":
+    #TODO: argparse
     # I/O settings
     DATAPATH = os.path.join(os.getcwd(), "LSTMdata")
     MODEL_PATH = os.path.join(os.getcwd(), "models")
     PAGE_MODEL_PATH = os.path.join(MODEL_PATH, "page_model.pt")
-    
-    pages = load_training_data(os.path.join(DATAPATH, "textTraining1.txt"),
-                               os.path.join(DATAPATH, "tagTraining1.xlsx"))
-    
-    print("Loaded {} pages.".format(len(pages)))
+    TAG_MODEL_PATH = os.path.join(MODEL_PATH, "tag_model.pt")
+    EMBEDDING_PATH = os.path.join(os.getcwd(), "Embedding", "polyglot-zh_char.pkl")
+        
+    # Training settings
+    N_EPOCH = 30
+    N_CHECKPOINT = 5
+    LEARNING_RATE = 0.2
+    N_TRAIN = 15
+    TRAIN_FROM_SCRATCH = True
+    EOS_TAG = 'S'
     
     # Model hyper-parameter definition
-    page_tag_dict = {"B": 0, "N": 1}
     EMBEDDING_DIM = 64          # depending on pre-trained word embedding model
-    HIDDEN_DIM = 8
-    page_to_sent_model = LSTMTagger(EMBEDDING_DIM, HIDDEN_DIM, page_tag_dict)
-    loss_function = nn.NLLLoss()
-    optimizer = optim.SGD(page_to_sent_model.parameters(), lr=0.3)
+    HIDDEN_DIM = 6
+    char_encoder = XEncoder(EMBEDDING_DIM, EMBEDDING_PATH)
+    interested_tag_tuples = [("人名", 'R'), ("任職時間", 'T'), ("籍貫", 'L'),
+                             ("入仕方法", 'E')]
+    interested_tags = [item[1] for item in interested_tag_tuples]
+    page_tag_encoder = YEncoder(["N", EOS_TAG])
+    sent_tag_encoder = YEncoder(["N", "<BEG>", "<END>"] + interested_tags)
+    page_to_sent_model = LSTMTagger(EMBEDDING_DIM, HIDDEN_DIM, page_tag_encoder.get_tag_dim())
+    sent_to_tag_model = LSTMTagger(EMBEDDING_DIM, HIDDEN_DIM, 
+                                   sent_tag_encoder.get_tag_dim(), bidirectional=True)
+    sent_loss_function = nn.NLLLoss()
+    tag_loss_function = nn.NLLLoss()
+    sent_optimizer = optim.SGD(page_to_sent_model.parameters(), lr=LEARNING_RATE)
+    tag_optimizer = optim.SGD(sent_to_tag_model.parameters(), lr=LEARNING_RATE)
     
-    # Load model if it was previously saved
-    if os.path.exists(PAGE_MODEL_PATH):
+    # Load training and testing data
+    pages_train = load_data(os.path.join(DATAPATH, "textTraining2.txt"),
+                               os.path.join(DATAPATH, "tagTraining2.xlsx"),
+                               "train")[:N_TRAIN]
+    print("Loaded {} pages for training.".format(len(pages_train)))
+    pages_test = load_data(os.path.join(DATAPATH, "textTraining2.txt"), None,
+                               "test")[N_TRAIN:]
+    print("Loaded {} pages for testing.".format(len(pages_test)))
+    
+    # Load model if it was previously saved and want to continue
+    if os.path.exists(PAGE_MODEL_PATH) and not TRAIN_FROM_SCRATCH:
         page_to_sent_model.load_state_dict(torch.load(PAGE_MODEL_PATH))
         page_to_sent_model.eval()
     
-    torch.manual_seed(1)
     
+    # Training
     # Step 1. Train model to parse pages into sentences
-    training_data = [(p.get_x(), p.get_y()) for p in pages]    
-    for epoch in range(50):
-        print(epoch)
-        #TODO: use full sample
-        for sentence, tags in training_data[:10]:
-            page_to_sent_model.zero_grad()   # clear accumulated gradient before each instance
-            #TODO: see whether '○' is convert as <UNK>
-            sentence_in = page_to_sent_model.prepare_sequence(sentence)
-            targets = page_to_sent_model.prepare_targets(tags)
-            tag_scores = page_to_sent_model(sentence_in)
-            loss = loss_function(tag_scores, targets)
-            loss.backward()
-            optimizer.step()
-        if epoch % 10 == 0:
-            print("Epoch {}".format(epoch))
-            print("Loss = {}".format(loss.item()))
-            with torch.no_grad():
-                for training_sent, _ in training_data[:3]:
-                    inputs = page_to_sent_model.prepare_sequence(training_sent)
-                    tag_scores = page_to_sent_model(inputs)
-                    res = page_to_sent_model.convert_results(tag_scores.max(dim=1).indices)
-                    print(res)
-                    for sent in utils.parse(training_sent, res):
-                        print(sent)
-    # After training, save trained model
-    torch.save(page_to_sent_model.state_dict(), PAGE_MODEL_PATH)
+    torch.manual_seed(1)
+    page_to_sent_training_data = [(p.get_x(char_encoder), 
+                                   p.get_y(page_tag_encoder)) for p in pages_train]
+    page_to_sent_test_data = [p.get_x(char_encoder) for p in pages_test]
+    page_to_sent_model = train(page_to_sent_training_data, page_to_sent_model,
+                               sent_optimizer, sent_loss_function)
     
+    # Step 2. Train model to tag sentences
+    sent_to_tag_training_data = []
+    for p in pages_train:
+        for r in p.get_records():
+            sent_to_tag_training_data.append((r.get_x(char_encoder), 
+                                              r.get_y(sent_tag_encoder)))
+    sent_to_tag_model = train(sent_to_tag_training_data, sent_to_tag_model, 
+                              tag_optimizer, tag_loss_function)
+    
+    # Save models
+    torch.save(page_to_sent_model.state_dict(), PAGE_MODEL_PATH)
+    torch.save(sent_to_tag_model.state_dict(), TAG_MODEL_PATH)
+    
+    # Evaluate on test set
+    # Step 1. using page_to_sent_model, parse pages to sentences
+    tag_seq_list = evaluate(page_to_sent_model, page_to_sent_test_data, 
+                            page_tag_encoder)
+    sent_to_tag_test_data = []
+    for p, pl in zip(pages_test, get_sent_len_for_pages(tag_seq_list, EOS_TAG)):
+        p.separate_sentence(pl)
+        for r in p.get_records():
+            sent_to_tag_test_data.append(r.get_x(char_encoder))
+            
+    # Step 2. using sent_to_tag_model, tag each sentence
+    tagged_sent = evaluate(sent_to_tag_model, sent_to_tag_test_data,
+                           sent_tag_encoder)
+    assert len(tagged_sent) == sum([len(p.get_records()) for p in pages_test])
+    for p in pages_test:
+        num_records = len(p.get_records())
+        p.tag_records(tagged_sent[:num_records])
+        tagged_sent = tagged_sent[num_records:]
+        p.print_sample_records(3)
