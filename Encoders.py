@@ -40,21 +40,21 @@ class XEncoder(Encoder):
         sentence = torch.tensor(idxs, dtype=torch.long)
         return self.word_embeddings(sentence)
         
-    
 
 class YEncoder(Encoder):
-    def __init__(self):
-        pass
+    def __init__(self, tag_list):
+        self.tag_dict = dict()
+        self.tag_index_dict  = dict()
+        for x,y in enumerate(tag_list):
+            self.tag_dict[y] = x
+            self.tag_index_dict[x] = y
     
-
-class OneHotKeyEncoder(XEncoder):
-    def __init__(self):
-        pass
+    def get_tag_dim(self):
+        return len(self.tag_dict)
     
-
-class PolyglotEncoder(XEncoder):
-    def __init__(self):
-        pass
+    def encode(self, series):
+        return torch.tensor([self.tag_dict[w] for w in series], dtype=torch.long)
     
-
-
+    def decode(self, res_tensor):
+        return [self.tag_index_dict[t.item()] for t in res_tensor]
+    

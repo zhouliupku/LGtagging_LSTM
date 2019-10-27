@@ -84,7 +84,7 @@ class Page(object):
         """
         return encoder.encode(self.get_text())
         
-    def get_y(self):
+    def get_y(self, encoder):
         """
         get y sequence as tensor
         """
@@ -94,7 +94,7 @@ class Page(object):
             length = record.get_orig_len()
             eos_idx += length
             tags[eos_idx] = 'S'
-        return tags
+        return encoder.encode(tags)
 
             
 
@@ -146,11 +146,11 @@ class Record(object):
         """
         return encoder.encode([cs.get_char() for cs in self.chars])
         
-    def get_y(self):
+    def get_y(self, encoder):
         """
         get y sequence as tensor
         """
-        return [cs.get_tag() for cs in self.chars]
+        return encoder.encode([cs.get_tag() for cs in self.chars])
         
     
 class CharSample(object):
