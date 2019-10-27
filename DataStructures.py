@@ -12,9 +12,10 @@ class Page(object):
         line = line.split('【')[1].strip().split('】')
         self.page_id = int(line[0])
         self.orig_text = line[1]
-        subdf = df[df["Page No."] == self.page_id]
+        self.interested_tags = interested_tags
         if mode == "train":
-            self.records = self.create_records(subdf, interested_tags)
+            subdf = df[df["Page No."] == self.page_id]
+            self.records = self.create_records(subdf, self.interested_tags)
             self.is_sentence_separated = True
         elif mode == "test":
             self.records = []
@@ -62,7 +63,7 @@ class Page(object):
         head_char_idx = 0
         for sent_len in parsed_sent_len:
             text = self.orig_text[head_char_idx : (head_char_idx + sent_len)]
-            self.records.append(Record(record_idx, (text, None)))
+            self.records.append(Record(record_idx, (text, None), self.interested_tags))
             head_char_idx += sent_len
             record_idx += 1
         
