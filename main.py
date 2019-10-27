@@ -7,21 +7,27 @@ Created on Sun Oct 20 22:43:13 2019
 
 import os
 import torch
+import numpy as np
 import pandas as pd
 from torch import optim
 
 from DataStructures import Page
 from model import LSTMTagger
 from Encoders import XEncoder, YEncoder
-from utils import get_sent_len_for_pages
+import lg_utils
 
 def load_data(text_filename, tag_filename, mode):
+    """
+    return a list of Page instances
+    """
     with open(text_filename, 'r', encoding="utf8") as txtfile:
         lines = txtfile.readlines()
     if mode == "train":
         df = pd.read_excel(tag_filename)
-    else:
+    elif mode == "test":
         df = None
+    else:
+        raise ValueError("Unsupported mode: {}".format(mode))
     pages = []
     for line in lines:
         if '【' not in line or '】' not in line:
@@ -39,15 +45,23 @@ if __name__ == "__main__":
     PAGE_MODEL_PATH = os.path.join(MODEL_PATH, "page_model.pt")
     TAG_MODEL_PATH = os.path.join(MODEL_PATH, "tag_model.pt")
     EMBEDDING_PATH = os.path.join(os.getcwd(), "Embedding", "polyglot-zh_char.pkl")
+    NUM_SECTION_TAGGED, NUM_SECTION_UNTAGGED = 2, 1
+    tagged_filelist = [(os.path.join(INPUT_PATH, "textTraining{}.txt".format(i)),
+                        os.path.join(INPUT_PATH, "tagTraining{}.xlsx".format(i))) \
+                        for i in range(NUM_SECTION_TAGGED)]
+    untagged_filelist = [os.path.join(INPUT_PATH, "textTest{}.txt".format(i))
+                        for i in range(NUM_SECTION_UNTAGGED)]
         
     # Training settings
     N_EPOCH = 30
-    N_CHECKPOINT = 5
-    LEARNING_RATE = 0.2
-    N_TRAIN = 15
-    TRAIN_FROM_SCRATCH = False
-    NEED_SAVE_MODEL = False
+    N_CHECKPOINT = 2
+    LEARNING_RATE = 0.3
+    N_CV_PERC = 0.5
+    NEED_TRAIN_MODEL = True
+    NEED_SAVE_MODEL = True
     EOS_TAG = 'S'
+    np.random.seed(0)
+    torch.manual_seed(0)
     
     # Model hyper-parameter definition
     EMBEDDING_DIM = 64          # depending on pre-trained word embedding model
@@ -64,42 +78,53 @@ if __name__ == "__main__":
     sent_optimizer = optim.SGD(page_to_sent_model.parameters(), lr=LEARNING_RATE)
     tag_optimizer = optim.SGD(sent_to_tag_model.parameters(), lr=LEARNING_RATE)
     
-    # Load training and testing data
-    pages_train = load_data(os.path.join(INPUT_PATH, "textTraining2.txt"),
-                               os.path.join(INPUT_PATH, "tagTraining2.xlsx"),
-                               "train")[:N_TRAIN]
+    # Load training, CV and testing data
+    pages_tagged = []
+    for txt_filename, db_filename in tagged_filelist:
+        pages_tagged.extend(load_data(txt_filename, db_filename, "train"))
+    n_cv = int(N_CV_PERC * len(pages_tagged))
+    index_permuted = np.random.permutation(len(pages_tagged))
+    pages_train = [pages_tagged[i] for i in index_permuted[:(len(pages_tagged)-n_cv)]]
+    pages_cv = [pages_tagged[i] for i in index_permuted[(len(pages_tagged)-n_cv):]]
     print("Loaded {} pages for training.".format(len(pages_train)))
-    pages_test = load_data(os.path.join(INPUT_PATH, "textTraining2.txt"), None,
-                               "test")[N_TRAIN:]
+    print("Loaded {} pages for cross validation.".format(len(pages_cv)))
+    pages_test = []
+    for txt_filename in untagged_filelist:
+        pages_test.extend(load_data(txt_filename, None, "test"))
     print("Loaded {} pages for testing.".format(len(pages_test)))
     
     # Load models if it was previously saved and want to continue
-    if os.path.exists(PAGE_MODEL_PATH) and not TRAIN_FROM_SCRATCH:
+    if os.path.exists(PAGE_MODEL_PATH) and not NEED_TRAIN_MODEL:
         page_to_sent_model.load_state_dict(torch.load(PAGE_MODEL_PATH))
         page_to_sent_model.eval()
-    if os.path.exists(TAG_MODEL_PATH) and not TRAIN_FROM_SCRATCH:
+    if os.path.exists(TAG_MODEL_PATH) and not NEED_TRAIN_MODEL:
         sent_to_tag_model.load_state_dict(torch.load(TAG_MODEL_PATH))
         sent_to_tag_model.eval()
     
     # Training
     # Step 1. Data preparation
-    torch.manual_seed(1)
-    page_to_sent_training_data = [(p.get_x(char_encoder), 
-                                   p.get_y(page_tag_encoder)) for p in pages_train]
+    page_to_sent_training_data = lg_utils.get_page_data_from_pages(pages_train,
+                                                                   char_encoder,
+                                                                   page_tag_encoder)
+    page_to_sent_cv_data = lg_utils.get_page_data_from_pages(pages_cv,
+                                                             char_encoder,
+                                                             page_tag_encoder)
     page_to_sent_test_data = [p.get_x(char_encoder) for p in pages_test]
-    sent_to_tag_training_data = []
-    for p in pages_train:
-        for r in p.get_records():
-            sent_to_tag_training_data.append((r.get_x(char_encoder), 
-                                              r.get_y(sent_tag_encoder)))
+    sent_to_tag_training_data = lg_utils.get_sent_data_from_pages(pages_train,
+                                                                  char_encoder,
+                                                                  sent_tag_encoder)
+    sent_to_tag_cv_data = lg_utils.get_sent_data_from_pages(pages_cv,
+                                                            char_encoder,
+                                                            sent_tag_encoder)
     
     # Step 2. Model training
-    # 2.a Train model to parse pages into sentences
-    page_to_sent_model.train(page_to_sent_training_data, sent_optimizer, "NLL",
-                             N_EPOCH, N_CHECKPOINT)
-    # 2.b Train model to tag sentences
-    sent_to_tag_model.train(sent_to_tag_training_data, tag_optimizer, "NLL",
-                            N_EPOCH, N_CHECKPOINT)
+    if NEED_TRAIN_MODEL:
+        # 2.a Train model to parse pages into sentences
+        page_to_sent_model.train_model(page_to_sent_training_data, page_to_sent_cv_data, 
+                                       sent_optimizer, "NLL", N_EPOCH, N_CHECKPOINT)
+        # 2.b Train model to tag sentences
+        sent_to_tag_model.train_model(sent_to_tag_training_data, sent_to_tag_cv_data, 
+                                      tag_optimizer, "NLL", N_EPOCH, N_CHECKPOINT)
     
     # Save models
     if NEED_SAVE_MODEL:
@@ -108,17 +133,17 @@ if __name__ == "__main__":
     
     # Evaluate on test set
     # Step 1. using page_to_sent_model, parse pages to sentences
-    tag_seq_list = page_to_sent_model.evaluate(page_to_sent_test_data, 
-                                               page_tag_encoder)
+    tag_seq_list = page_to_sent_model.evaluate_model(page_to_sent_test_data, 
+                                                     page_tag_encoder)
     sent_to_tag_test_data = []
-    for p, pl in zip(pages_test, get_sent_len_for_pages(tag_seq_list, EOS_TAG)):
+    for p, pl in zip(pages_test, lg_utils.get_sent_len_for_pages(tag_seq_list, EOS_TAG)):
         p.separate_sentence(pl)
         for r in p.get_records():
             sent_to_tag_test_data.append(r.get_x(char_encoder))
             
     # Step 2. using sent_to_tag_model, tag each sentence
-    tagged_sent = sent_to_tag_model.evaluate(sent_to_tag_test_data,
-                                             sent_tag_encoder)
+    tagged_sent = sent_to_tag_model.evaluate_model(sent_to_tag_test_data,
+                                                   sent_tag_encoder)
     assert len(tagged_sent) == sum([len(p.get_records()) for p in pages_test])
     for p in pages_test:
         num_records = len(p.get_records())

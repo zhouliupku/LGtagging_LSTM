@@ -73,6 +73,13 @@ def get_keywords_from_tagged_record(char_samples, tag_name):
     if len(current_keyword) > 0:
         res.append(current_keyword)
     return res
-                
-                
-                
+
+def get_page_data_from_pages(pages, x_encoder, y_encoder):
+    return [(p.get_x(x_encoder), p.get_y(y_encoder)) for p in pages]
+
+def get_sent_data_from_pages(pages, x_encoder, y_encoder):
+    data = []
+    for p in pages:
+        for r in p.get_records():
+            data.append((r.get_x(x_encoder), r.get_y(y_encoder)))
+    return data

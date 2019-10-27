@@ -5,7 +5,7 @@ Created on Sun Oct 20 15:55:30 2019
 @author: Zhou
 """
 
-import utils
+import lg_utils
 
 class Page(object):
     def __init__(self, line, df, mode, interested_tags):
@@ -38,7 +38,7 @@ class Page(object):
         tags = []
         last_cutoff = 0
         for _, row in df.iterrows():
-            name = utils.convert_to_orig(row["人名"])
+            name = lg_utils.convert_to_orig(row["人名"])
             if not name in self.orig_text:
                 raise ValueError("Name {} not in original text!".format(name))
             cutoff = self.orig_text.find(name)
@@ -117,7 +117,7 @@ class Record(object):
         else:
             # if provided, modify tag_seq and set flag
             for colname, tagname in interested_tag_tuples:
-                utils.modify_tag_seq(self.orig_text, tag_seq,
+                lg_utils.modify_tag_seq(self.orig_text, tag_seq,
                                      self.orig_tags[colname], tagname)
             self.is_tagged = True
         self.chars = [CharSample(c, t) for c, t in zip(self.orig_text, tag_seq)]
@@ -149,7 +149,7 @@ class Record(object):
             return None
         tag_res_dict = {}
         for col_name, tag_name in interested_tag_tuples:
-            keywords = utils.get_keywords_from_tagged_record(self.chars[1:-1], tag_name)
+            keywords = lg_utils.get_keywords_from_tagged_record(self.chars[1:-1], tag_name)
             tag_res_dict[col_name] = keywords
         return tag_res_dict
         

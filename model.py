@@ -26,7 +26,8 @@ class LSTMTagger(nn.Module):
         tag_scores = nn.functional.log_softmax(tag_space, dim=1)
         return tag_scores
 
-    def train(self, training_data, optimizer, loss_type, n_epoch, n_check):
+    def train_model(self, training_data, cv_data,
+                    optimizer, loss_type, n_epoch, n_check):
         if loss_type == "NLL":
             loss_function = nn.NLLLoss()
         else:
@@ -40,9 +41,14 @@ class LSTMTagger(nn.Module):
                 optimizer.step()
             if epoch % n_check == 0:
                 print("Epoch {}".format(epoch))
-                print("Loss = {}".format(loss.item()))
+                print("Training Loss = {}".format(loss.item()))
+                with torch.no_grad():
+                    for sentence, targets in cv_data:
+                        tag_scores = self.forward(sentence)
+                        loss = loss_function(tag_scores, targets)
+                    print("CV Loss = {}".format(loss.item()))
 
-    def evaluate(self, test_data, y_encoder):
+    def evaluate_model(self, test_data, y_encoder):
         """
         Take model and test data (list of strings), return list of list of tags
         """
