@@ -12,10 +12,6 @@ class LSTMTagger(nn.Module):
     def __init__(self, embedding_dim, hidden_dim, tag_dim,
                  bidirectional=False):
         super(LSTMTagger, self).__init__()
-        #TODO: change to encode/decode of yencoder
-#        self.tag_dict = tag_dict
-#        self.tagix_to_tag = {v:k for k,v in tag_dict.items()}
-       
         self.hidden_dim = hidden_dim
         self.lstm = nn.LSTM(embedding_dim, hidden_dim, bidirectional=bidirectional)
         if bidirectional:

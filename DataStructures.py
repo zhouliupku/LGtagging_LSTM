@@ -8,13 +8,13 @@ Created on Sun Oct 20 15:55:30 2019
 import utils
 
 class Page(object):
-    def __init__(self, line, df, mode):
+    def __init__(self, line, df, mode, interested_tags):
         line = line.split('【')[1].strip().split('】')
         self.page_id = int(line[0])
         self.orig_text = line[1]
         subdf = df[df["Page No."] == self.page_id]
         if mode == "train":
-            self.records = self.create_records(subdf)
+            self.records = self.create_records(subdf, interested_tags)
             self.is_sentence_separated = True
         elif mode == "test":
             self.records = []
@@ -28,7 +28,7 @@ class Page(object):
         else:
             return list(self.orig_text)
     
-    def create_records(self, df):
+    def create_records(self, df, interested_tags):
         """
         Create a list of Record objects by parsing with self.orig_text and df
         """
@@ -46,7 +46,7 @@ class Page(object):
             last_cutoff = cutoff
         texts.append(self.orig_text[last_cutoff:])
         for idx, data in enumerate(zip(texts[1:], tags)):
-            records.append(Record(idx, data))        
+            records.append(Record(idx, data, interested_tags))        
         return records
     
     def get_records(self):
@@ -99,7 +99,7 @@ class Page(object):
             
 
 class Record(object):
-    def __init__(self, idx, data):
+    def __init__(self, idx, data, interested_tags):
         """
         idx: record id indicating the index of record in the page it belongs to
         data: tuple of (text, tags)
@@ -109,7 +109,7 @@ class Record(object):
         self.orig_tags = data[1]        # as single row of pd.df
         # Build tag sequence
         tag_seq = ['N' for _ in self.orig_text]
-        interested_tags = [("人名", 'R'), ("任官地點", "L"), ("任職時間", "T")]
+        
         if self.orig_tags is None:
             # when tags are not provided at initialization, set flag
             self.is_tagged = False

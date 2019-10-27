@@ -22,7 +22,7 @@ def load_training_data(text_filename, tag_filename, mode):
     for line in lines:
         if '【' not in line or '】' not in line:
             continue
-        pages.append(Page(line, df, mode))
+        pages.append(Page(line, df, mode, interested_tag_tuples))
     return pages
 
 def train(training_data, model, optimizer, loss_function):
@@ -30,7 +30,7 @@ def train(training_data, model, optimizer, loss_function):
     model is modifiable
     '''
     #TODO: move into models
-    for epoch in range(N_EPOCH):    #TODO: training settings as a class
+    for epoch in range(N_EPOCH):
         for sentence, targets in training_data:
             model.zero_grad()   # clear accumulated gradient before each instance
             tag_scores = model(sentence)
@@ -58,7 +58,7 @@ def evaluate(model, test_data, y_encoder):
 
       
 if __name__ == "__main__":
-    #TODO: arg_parse
+    #TODO: argparse
     # I/O settings
     DATAPATH = os.path.join(os.getcwd(), "LSTMdata")
     MODEL_PATH = os.path.join(os.getcwd(), "models")
@@ -77,8 +77,11 @@ if __name__ == "__main__":
     EMBEDDING_DIM = 64          # depending on pre-trained word embedding model
     HIDDEN_DIM = 8
     char_encoder = XEncoder(EMBEDDING_DIM, EMBEDDING_PATH)
+    interested_tag_tuples = [("人名", 'R'), ("任職時間", 'T'), ("籍貫", 'L'),
+                             ("入仕方法", 'E')]
+    interested_tags = [item[1] for item in interested_tag_tuples]
     page_tag_encoder = YEncoder(["S", "N"])
-    sent_tag_encoder = YEncoder(["N", "R", "L", "T", "<BEG>", "<END>"])
+    sent_tag_encoder = YEncoder(["N", "<BEG>", "<END>"] + interested_tags)
     page_to_sent_model = LSTMTagger(EMBEDDING_DIM, HIDDEN_DIM, page_tag_encoder.get_tag_dim())
     sent_to_tag_model = LSTMTagger(EMBEDDING_DIM, HIDDEN_DIM, 
                                    sent_tag_encoder.get_tag_dim(), bidirectional=True)
