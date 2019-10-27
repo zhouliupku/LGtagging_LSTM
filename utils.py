@@ -54,3 +54,25 @@ def get_sent_len_for_pages(tag_seq_list, eos_tag):
             parsed_sent_len.append(current_len)
         parsed_sent_len_for_pages.append(parsed_sent_len)
     return parsed_sent_len_for_pages
+
+
+def get_keywords_from_tagged_record(char_samples, tag_name):
+    res = []
+    is_inside_keyword = False
+    current_keyword = ""
+    for cs in char_samples:
+        if cs.get_tag() == tag_name:
+            is_inside_keyword = True
+            current_keyword += cs.get_char()
+        else:
+            if is_inside_keyword:       # First char sample after keyword
+                res.append(current_keyword)
+                current_keyword = ""
+            is_inside_keyword = False
+    # In case last keyword is by end of sentence
+    if len(current_keyword) > 0:
+        res.append(current_keyword)
+    return res
+                
+                
+                

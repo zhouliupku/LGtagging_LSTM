@@ -64,7 +64,8 @@ def evaluate(model, test_data, y_encoder):
 if __name__ == "__main__":
     #TODO: argparse
     # I/O settings
-    DATAPATH = os.path.join(os.getcwd(), "LSTMdata")
+    INPUT_PATH = os.path.join(os.getcwd(), "LSTMdata")
+    OUTPUT_PATH = os.path.join(os.getcwd(), "Autoparse")
     MODEL_PATH = os.path.join(os.getcwd(), "models")
     PAGE_MODEL_PATH = os.path.join(MODEL_PATH, "page_model.pt")
     TAG_MODEL_PATH = os.path.join(MODEL_PATH, "tag_model.pt")
@@ -75,7 +76,7 @@ if __name__ == "__main__":
     N_CHECKPOINT = 5
     LEARNING_RATE = 0.2
     N_TRAIN = 15
-    TRAIN_FROM_SCRATCH = True
+    TRAIN_FROM_SCRATCH = False
     EOS_TAG = 'S'
     
     # Model hyper-parameter definition
@@ -96,18 +97,21 @@ if __name__ == "__main__":
     tag_optimizer = optim.SGD(sent_to_tag_model.parameters(), lr=LEARNING_RATE)
     
     # Load training and testing data
-    pages_train = load_data(os.path.join(DATAPATH, "textTraining2.txt"),
-                               os.path.join(DATAPATH, "tagTraining2.xlsx"),
+    pages_train = load_data(os.path.join(INPUT_PATH, "textTraining2.txt"),
+                               os.path.join(INPUT_PATH, "tagTraining2.xlsx"),
                                "train")[:N_TRAIN]
     print("Loaded {} pages for training.".format(len(pages_train)))
-    pages_test = load_data(os.path.join(DATAPATH, "textTraining2.txt"), None,
+    pages_test = load_data(os.path.join(INPUT_PATH, "textTraining2.txt"), None,
                                "test")[N_TRAIN:]
     print("Loaded {} pages for testing.".format(len(pages_test)))
     
-    # Load model if it was previously saved and want to continue
+    # Load models if it was previously saved and want to continue
     if os.path.exists(PAGE_MODEL_PATH) and not TRAIN_FROM_SCRATCH:
         page_to_sent_model.load_state_dict(torch.load(PAGE_MODEL_PATH))
         page_to_sent_model.eval()
+    if os.path.exists(TAG_MODEL_PATH) and not TRAIN_FROM_SCRATCH:
+        sent_to_tag_model.load_state_dict(torch.load(TAG_MODEL_PATH))
+        sent_to_tag_model.eval()
     
     
     # Training
@@ -116,8 +120,8 @@ if __name__ == "__main__":
     page_to_sent_training_data = [(p.get_x(char_encoder), 
                                    p.get_y(page_tag_encoder)) for p in pages_train]
     page_to_sent_test_data = [p.get_x(char_encoder) for p in pages_test]
-    page_to_sent_model = train(page_to_sent_training_data, page_to_sent_model,
-                               sent_optimizer, sent_loss_function)
+#    page_to_sent_model = train(page_to_sent_training_data, page_to_sent_model,
+#                               sent_optimizer, sent_loss_function)
     
     # Step 2. Train model to tag sentences
     sent_to_tag_training_data = []
@@ -125,12 +129,12 @@ if __name__ == "__main__":
         for r in p.get_records():
             sent_to_tag_training_data.append((r.get_x(char_encoder), 
                                               r.get_y(sent_tag_encoder)))
-    sent_to_tag_model = train(sent_to_tag_training_data, sent_to_tag_model, 
-                              tag_optimizer, tag_loss_function)
+#    sent_to_tag_model = train(sent_to_tag_training_data, sent_to_tag_model, 
+#                              tag_optimizer, tag_loss_function)
     
     # Save models
-    torch.save(page_to_sent_model.state_dict(), PAGE_MODEL_PATH)
-    torch.save(sent_to_tag_model.state_dict(), TAG_MODEL_PATH)
+#    torch.save(page_to_sent_model.state_dict(), PAGE_MODEL_PATH)
+#    torch.save(sent_to_tag_model.state_dict(), TAG_MODEL_PATH)
     
     # Evaluate on test set
     # Step 1. using page_to_sent_model, parse pages to sentences
@@ -151,3 +155,12 @@ if __name__ == "__main__":
         p.tag_records(tagged_sent[:num_records])
         tagged_sent = tagged_sent[num_records:]
         p.print_sample_records(3)
+        
+    # Step 3. Save results to csv files
+    tagged_result = pd.DataFrame(columns=[item[0] for item in interested_tag_tuples])
+    for p in pages_test:
+        for r in p.get_records():
+            tagged_result = tagged_result.append(r.get_tag_res_dict(interested_tag_tuples),
+                                                 ignore_index=True)
+    tagged_result.to_excel(os.path.join(OUTPUT_PATH, "test.xlsx"), index=False)
+    
