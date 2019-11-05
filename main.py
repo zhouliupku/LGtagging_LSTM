@@ -11,52 +11,26 @@ import numpy as np
 import pandas as pd
 from torch import optim
 
-from DataStructures import Page
 from model import LSTMTagger
 from Encoders import XEncoder, YEncoder
+from data_load import DataLoader
 import lg_utils
 
-def load_data(text_filename, tag_filename, mode):
-    """
-    return a list of Page instances
-    """
-    with open(text_filename, 'r', encoding="utf8") as txtfile:
-        lines = txtfile.readlines()
-    if mode == "train":
-        df = pd.read_excel(tag_filename)
-    elif mode == "test":
-        df = None
-    else:
-        raise ValueError("Unsupported mode: {}".format(mode))
-    pages = []
-    for line in lines:
-        if '【' not in line or '】' not in line:
-            continue
-        pages.append(Page(line, df, mode, interested_tag_tuples))
-    return pages
-
-      
 if __name__ == "__main__":
     #TODO: argparse
     # I/O settings
-    INPUT_PATH = os.path.join(os.getcwd(), "LSTMdata")
     OUTPUT_PATH = os.path.join(os.getcwd(), "Autoparse")
     MODEL_PATH = os.path.join(os.getcwd(), "models")
     PAGE_MODEL_PATH = os.path.join(MODEL_PATH, "page_model.pt")
     TAG_MODEL_PATH = os.path.join(MODEL_PATH, "tag_model.pt")
     EMBEDDING_PATH = os.path.join(os.getcwd(), "Embedding", "polyglot-zh_char.pkl")
-    NUM_SECTION_TAGGED, NUM_SECTION_UNTAGGED = 2, 1
-    tagged_filelist = [(os.path.join(INPUT_PATH, "textTraining{}.txt".format(i)),
-                        os.path.join(INPUT_PATH, "tagTraining{}.xlsx".format(i))) \
-                        for i in range(NUM_SECTION_TAGGED)]
-    untagged_filelist = [os.path.join(INPUT_PATH, "textTest{}.txt".format(i))
-                        for i in range(NUM_SECTION_UNTAGGED)]
+    SOURCE_TYPE = "xy"
         
     # Training settings
     N_EPOCH = 30
     N_CHECKPOINT = 2
     LEARNING_RATE = 0.3
-    N_CV_PERC = 0.5
+    CV_PERC = 0.5
     NEED_TRAIN_MODEL = True
     NEED_SAVE_MODEL = True
     EOS_TAG = 'S'
@@ -79,19 +53,8 @@ if __name__ == "__main__":
     tag_optimizer = optim.SGD(sent_to_tag_model.parameters(), lr=LEARNING_RATE)
     
     # Load training, CV and testing data
-    pages_tagged = []
-    for txt_filename, db_filename in tagged_filelist:
-        pages_tagged.extend(load_data(txt_filename, db_filename, "train"))
-    n_cv = int(N_CV_PERC * len(pages_tagged))
-    index_permuted = np.random.permutation(len(pages_tagged))
-    pages_train = [pages_tagged[i] for i in index_permuted[:(len(pages_tagged)-n_cv)]]
-    pages_cv = [pages_tagged[i] for i in index_permuted[(len(pages_tagged)-n_cv):]]
-    print("Loaded {} pages for training.".format(len(pages_train)))
-    print("Loaded {} pages for cross validation.".format(len(pages_cv)))
-    pages_test = []
-    for txt_filename in untagged_filelist:
-        pages_test.extend(load_data(txt_filename, None, "test"))
-    print("Loaded {} pages for testing.".format(len(pages_test)))
+    loader = DataLoader(SOURCE_TYPE)
+    pages_train, pages_cv, pages_test = loader.load_data(CV_PERC, interested_tag_tuples)
     
     # Load models if it was previously saved and want to continue
     if os.path.exists(PAGE_MODEL_PATH) and not NEED_TRAIN_MODEL:

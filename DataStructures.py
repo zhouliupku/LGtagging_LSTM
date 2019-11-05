@@ -8,7 +8,10 @@ Created on Sun Oct 20 15:55:30 2019
 import lg_utils
 
 class Page(object):
-    def __init__(self, line, df, mode, interested_tags):
+    def __init__(self):
+        pass
+    
+    def fill_with_xy_file(self, line, df, mode, interested_tags):
         line = line.split('【')[1].strip().split('】')
         self.page_id = int(line[0])
         self.orig_text = line[1]
@@ -22,6 +25,9 @@ class Page(object):
             self.is_sentence_separated = False
         else:
             raise ValueError("Unsupported mode:" + str(mode))
+            
+    def fill_with_html_file(self):
+        raise NotImplementedError
             
     def get_text(self):
         if self.is_sentence_separated:
@@ -47,7 +53,9 @@ class Page(object):
             last_cutoff = cutoff
         texts.append(self.orig_text[last_cutoff:])
         for idx, data in enumerate(zip(texts[1:], tags)):
-            records.append(Record(idx, data, interested_tags))        
+            rec = Record()
+            rec.fill_from_xy(idx, data, interested_tags)
+            records.append(rec)
         return records
     
     def get_records(self):
@@ -100,7 +108,13 @@ class Page(object):
             
 
 class Record(object):
-    def __init__(self, idx, data, interested_tag_tuples):
+    def __init__(self):
+        pass
+    
+    def fill_from_html(self):
+        raise NotImplementedError
+    
+    def fill_from_xy(self, idx, data, interested_tag_tuples):
         """
         idx: record id indicating the index of record in the page it belongs to
         data: tuple of (text, tags)
