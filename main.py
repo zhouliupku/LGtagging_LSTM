@@ -13,7 +13,7 @@ from torch import optim
 
 from model import LSTMTagger
 from Encoders import XEncoder, YEncoder
-from data_load import DataLoader
+from data_load import XYDataLoader
 import lg_utils
 
 if __name__ == "__main__":
@@ -53,9 +53,13 @@ if __name__ == "__main__":
     tag_optimizer = optim.SGD(sent_to_tag_model.parameters(), lr=LEARNING_RATE)
     
     # Load training, CV and testing data
-    loader = DataLoader(SOURCE_TYPE)
-    pages_train, pages_cv, pages_test = loader.load_data(CV_PERC, interested_tag_tuples)
-    
+    loader = XYDataLoader()
+    pages_train, pages_cv = loader.load_data(interested_tag_tuples,
+                                            "train",
+                                            2)
+    pages_test = loader.load_data(interested_tag_tuples, 
+                                            "test",
+                                            1)
     # Load models if it was previously saved and want to continue
     if os.path.exists(PAGE_MODEL_PATH) and not NEED_TRAIN_MODEL:
         page_to_sent_model.load_state_dict(torch.load(PAGE_MODEL_PATH))
