@@ -26,7 +26,7 @@ class Page(object):
         else:
             raise ValueError("Unsupported mode:" + str(mode))
             
-    def fill_with_html_file(self):
+    def fill_with_html_file(self, page_id, txt, tags, mode, interested_tags):
         raise NotImplementedError
             
     def get_text(self):
