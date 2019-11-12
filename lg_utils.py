@@ -6,6 +6,7 @@ Created on Mon Oct 21 00:11:24 2019
 """
 
 import re
+import numpy as np
 
 # space char in original text in LoGaRT
 SPACE = '○'
@@ -16,6 +17,17 @@ def convert_to_orig(s):
     """
     return s.replace(' ', SPACE)
 
+
+def random_separate(xs, perc):
+    """
+    given a list of objects xs, split it randomly into two parts with the first
+    one taking a percentage of perc
+    """
+    n1 = int(perc * len(xs))
+    index_permuted = np.random.permutation(len(xs))
+    x1 = [xs[i] for i in index_permuted[:(len(xs)-n1)]]
+    x2 = [xs[i] for i in index_permuted[(len(xs)-n1):]]
+    return x1, x2
 
 def modify_tag_seq(text, tag_seq, keyword, tagname):
     """
@@ -74,12 +86,5 @@ def get_keywords_from_tagged_record(char_samples, tag_name):
         res.append(current_keyword)
     return res
 
-def get_page_data_from_pages(pages, x_encoder, y_encoder):
-    return [(p.get_x(x_encoder), p.get_y(y_encoder)) for p in pages]
-
-def get_sent_data_from_pages(pages, x_encoder, y_encoder):
-    data = []
-    for p in pages:
-        for r in p.get_records():
-            data.append((r.get_x(x_encoder), r.get_y(y_encoder)))
-    return data
+def get_data_from_pages(samples, x_encoder, y_encoder):
+    return [(p.get_x(x_encoder), p.get_y(y_encoder)) for p in samples]

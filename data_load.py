@@ -11,30 +11,32 @@ import pandas as pd
 import itertools
 from bs4 import BeautifulSoup as BS
 
-from DataStructures import Page
+import lg_utils
+from DataStructures import Page, Record
 
 class DataLoader(object):
     def __init__(self):
         self.datapath = None
         
-    def load_data(self, interested_tag_tuples, mode, n, cv_perc=0.5):
+    def load_data(self, interested_tags, mode, n, cv_perc=0.5):
         pages = []
+        records = []
         for file in self.get_file(mode, n):
-            pages.extend(self.load_section(file, interested_tag_tuples, mode))
+            ps, rs = self.load_section(file, interested_tags, mode)
+            pages.extend(ps)
+            records.extend(rs)
             
         if mode == "train":
-            n_cv = int(cv_perc * len(pages))
-            index_permuted = np.random.permutation(len(pages))
-            pages_train = [pages[i] for i in index_permuted[:(len(pages)-n_cv)]]
-            pages_cv = [pages[i] for i in index_permuted[(len(pages)-n_cv):]]
+            pages_train, pages_cv = lg_utils.random_separate(pages, 1 - cv_perc)
+            records_train, records_cv = lg_utils.random_separate(records, 1 - cv_perc)
             print("Loaded {} pages for training.".format(len(pages_train)))
             print("Loaded {} pages for cross validation.".format(len(pages_cv)))
-            return pages_train, pages_cv
+            return pages_train, pages_cv, records_train, records_cv
         else:
             print("Loaded {} pages for testing.".format(len(pages)))
-            return pages
+            return pages, records
         
-    def load_section(self, files, interested_tag_tuples, mode):
+    def load_section(self, files, interested_tags, mode):
         raise NotImplementedError
         
     def get_file(self, mode, n):
@@ -46,9 +48,9 @@ class XYDataLoader(DataLoader):
         super().__init__()
         self.datapath = os.path.join(os.getcwd(), "LSTMdata")
         
-    def load_section(self, files, interested_tag_tuples, mode):
+    def load_section(self, files, interested_tags, mode):
         """
-        return a list of Page instances
+        return a list of Page instances and a list of Record instances
         """
         text_filename, tag_filename = files[0], files[1]
         with open(text_filename, 'r', encoding="utf8") as txtfile:
@@ -60,13 +62,48 @@ class XYDataLoader(DataLoader):
         else:
             raise ValueError("Unsupported mode: {}".format(mode))
         pages = []
-        for line in lines:
+        records = []
+        for line in lines:      # each line is a page
             if '【' not in line or '】' not in line:
                 continue
-            page = Page()
-            page.fill_with_xy_file(line, df, mode, interested_tag_tuples)
-            pages.append(page)
-        return pages    
+            line = line.split('【')[1].strip().split('】')
+            pid = int(line[0])
+            txt = line[1]
+            eos_idx = []
+            if mode == "train":
+                subdf = df[df["Page No."] == pid]
+                last_cutoff = 0
+                record_txts = []
+                record_dfs = []
+                for _, row in subdf.iterrows():
+                    name = lg_utils.convert_to_orig(row["人名"])
+                    if not name in txt:
+                        raise ValueError("Name {} not in original text!".format(name))
+                    cutoff = txt.find(name)
+                    if cutoff > 0:
+                        eos_idx.append(cutoff - 1)
+                    if last_cutoff > 0:
+                        record_txts.append(txt[last_cutoff:cutoff])
+                    record_dfs.append(row)
+                    last_cutoff = cutoff
+                cutoff = len(txt) - 1
+                eos_idx.append(cutoff - 1)
+                record_txts.append(txt[last_cutoff:cutoff])
+                        
+                for record_txt, row in zip(record_txts, record_dfs):
+                    # Build tag sequence
+                    tags = ['N' for _ in record_txt]
+                    for colname in interested_tags:
+                        lg_utils.modify_tag_seq(record_txt, tags, row[colname], colname)
+                        r = Record(record_txt, tags)
+                    records.append(r)
+    
+            elif mode == "test":
+                pass
+            else:
+                raise ValueError("Unsupported mode:" + str(mode))
+            pages.append(Page(pid, txt, eos_idx))
+        return pages, records
             
     def get_file(self, mode, n):
         if mode == "train":
@@ -85,7 +122,7 @@ class HtmlDataLoader(DataLoader):
         super().__init__()
         self.datapath = os.path.join(os.getcwd(), "logart_html")
         
-    def load_section(self, files, interested_tag_tuples, mode):
+    def load_section(self, files, interested_tags, mode):
         """
         return a list of Page instances
         """
@@ -95,7 +132,9 @@ class HtmlDataLoader(DataLoader):
         with open(html_filename, 'r', encoding = "utf8") as file:
             lines = file.readlines()
             
+        # TODO: Remove duplicate code
         pages = []
+        records = []
         all_text, all_tags = self.format_raw_data(lines)
         rest_tags = all_tags # list of tag, together page
         page_texts = all_text.split('【')
@@ -105,12 +144,34 @@ class HtmlDataLoader(DataLoader):
             if len(candi) != 2:
                 raise ValueError
             pid, txt = int(candi[0]), candi[1]
-            tags = rest_tags[(len(candi[0]) + 2):(len(candi[0]) + 2 + len(txt))]
+            page_tags = rest_tags[(len(candi[0]) + 2):(len(candi[0]) + 2 + len(txt))]
             rest_tags = rest_tags[(len(candi[0]) + 2 + len(txt)):]
-            page = Page()
-            page.fill_with_html_file(pid, txt, tags, mode, interested_tag_tuples)
-            pages.append(page)
-        return pages    
+            
+            eos_idx = []
+            last_tag_is_person = False
+            is_preface = True
+            curr_idx = 0
+            curr_txt = ""
+            curr_tags = []
+            for char, tag in zip(txt, page_tags):
+                if tag == "person":
+                    if not is_preface and not last_tag_is_person:      # End of a record
+                        records.append(Record(curr_txt, curr_tags))
+                        
+                    is_preface = False
+                    last_tag_is_person = True
+                    if curr_idx > 0:
+                        eos_idx.append(curr_idx)
+                if is_preface:
+                    continue
+                # Inside a record
+                curr_txt += char
+                curr_tags.append(tag)
+                curr_idx += 1
+            eos_idx.append(len(txt) - 1)
+            records.append(Record(curr_txt, curr_tags))
+            pages.append(Page(pid, txt, eos_idx))
+        return pages, records
             
     def get_file(self, mode, n):
         if mode == "train":

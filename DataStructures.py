@@ -8,8 +8,10 @@ Created on Sun Oct 20 15:55:30 2019
 import lg_utils
 
 class Page(object):
-    def __init__(self):
-        pass
+    def __init__(self, pid, txt, eos_idx):
+        self.pid = pid
+        self.txt = txt
+        self.eos_idx = eos_idx
     
     def fill_with_xy_file(self, line, df, mode, interested_tags):
         line = line.split('【')[1].strip().split('】')
@@ -25,15 +27,6 @@ class Page(object):
             self.is_sentence_separated = False
         else:
             raise ValueError("Unsupported mode:" + str(mode))
-            
-    def fill_with_html_file(self, page_id, txt, tags, mode, interested_tags):
-        raise NotImplementedError
-            
-    def get_text(self):
-        if self.is_sentence_separated:
-            return list(''.join([r.get_orig_text() for r in self.records]))
-        else:
-            return list(self.orig_text)
     
     def create_records(self, df, interested_tags):
         """
@@ -57,113 +50,83 @@ class Page(object):
             rec.fill_from_xy(idx, data, interested_tags)
             records.append(rec)
         return records
-    
-    def get_records(self):
-        return self.records
-    
+#    
+#    def get_records(self):
+#        return self.records
+#    
     def separate_sentence(self, parsed_sent_len):
         """
         Separate page to sentences according to parsed_sent_len, list of int
+        Return a list of Record
         """
-        # Step 1. fill self.records
-        assert len(self.orig_text) == sum(parsed_sent_len)
-        record_idx = 0
+        assert len(self.txt) == sum(parsed_sent_len)
         head_char_idx = 0
+        records = []
         for sent_len in parsed_sent_len:
-            text = self.orig_text[head_char_idx : (head_char_idx + sent_len)]
-            self.records.append(Record(record_idx, (text, None), self.interested_tags))
+            text = self.txt[head_char_idx : (head_char_idx + sent_len)]
+            records.append(Record(text, None))
             head_char_idx += sent_len
-            record_idx += 1
-        
-        # Step 2. Set flag to indicate that separation is done
-        self.is_sentence_separated = True
-        
-    def tag_records(self, tag_sequences):
-        for record, tag_seq in zip(self.get_records(), tag_sequences):
-            record.set_tag(tag_seq)
-            
-    def print_sample_records(self, n_sample):
-        print("Page {}:".format(self.page_id))
-        for r in self.records[0:n_sample]:
-            r.print_tag_results()
+        return records
+#        
+#        # Step 2. Set flag to indicate that separation is done
+#        self.is_sentence_separated = True
+#        
+#    def tag_records(self, tag_sequences):
+#        for record, tag_seq in zip(self.get_records(), tag_sequences):
+#            record.set_tag(tag_seq)
+#            
+#    def print_sample_records(self, n_sample):
+#        print("Page {}:".format(self.page_id))
+#        for r in self.records[0:n_sample]:
+#            r.print_tag_results()
         
     def get_x(self, encoder):
         """
         get x sequence as tensor given encoder
         """
-        return encoder.encode(self.get_text())
+        return encoder.encode(self.txt)
         
     def get_y(self, encoder):
         """
         get y sequence as tensor
         """
-        tags = ['N' for t in self.get_text()]
-        eos_idx = -1
-        for record in self.records:
-            length = record.get_orig_len()
-            eos_idx += length
-            tags[eos_idx] = 'S'
+        tags = ['N' for i in range(len(self.txt))]
+        for i in self.eos_idx:
+            tags[i] = 'S'
         return encoder.encode(tags)
 
             
 
 class Record(object):
-    def __init__(self):
-        pass
-    
-    def fill_from_html(self):
-        raise NotImplementedError
-    
-    def fill_from_xy(self, idx, data, interested_tag_tuples):
+    def __init__(self, txt, tags):
         """
         idx: record id indicating the index of record in the page it belongs to
         data: tuple of (text, tags)
         """
-        self.record_id = idx
-        self.orig_text = data[0]        # as a string without <S>, </S>
-        self.orig_tags = data[1]        # as single row of pd.df
-        # Build tag sequence
-        tag_seq = ['N' for _ in self.orig_text]
-        
-        if self.orig_tags is None:
-            # when tags are not provided at initialization, set flag
-            self.is_tagged = False
-        else:
-            # if provided, modify tag_seq and set flag
-            for colname, tagname in interested_tag_tuples:
-                lg_utils.modify_tag_seq(self.orig_text, tag_seq,
-                                     self.orig_tags[colname], tagname)
-            self.is_tagged = True
-        self.chars = [CharSample(c, t) for c, t in zip(self.orig_text, tag_seq)]
+        self.orig_text = txt        # as a string without <S>, </S>
+        self.orig_tags = [None for i in txt] if tags is None else tags
+        self.chars = [CharSample(c, t) for c, t in zip(self.orig_text, self.orig_tags)]
         self.chars = [CharSample("<S>", "<BEG>")] + self.chars
         self.chars = self.chars + [CharSample("</S>", "<END>")]
-        
-    def get_orig_len(self):
-        return len(self.orig_text)
-    
-    def get_orig_text(self):
-        return self.orig_text
-    
+#        
+#    def get_orig_len(self):
+#        return len(self.orig_text)
+#    
+#    def get_orig_text(self):
+#        return self.orig_text
+#    
     def set_tag(self, tag_seq):
         assert len(tag_seq) == len(self.chars)
         for i in range(1, len(tag_seq) - 1):
             self.chars[i].set_tag(tag_seq[i])
-        self.is_tagged = True
         
-    def print_tag_results(self):
-        print("Record {}:".format(self.record_id))
-        print(''.join([cs.get_char() for cs in self.chars[1:-1]]))
-        print(''.join([cs.get_tag() for cs in self.chars[1:-1]]))
-        
-    def get_tag_res_dict(self, interested_tag_tuples):
+    def get_tag_res_dict(self, interested_tags):
         """
         For a tagged record, return a dictionary {col_name: [content1, ...]}
         """
-        if not self.is_tagged:
-            return None
         tag_res_dict = {}
-        for col_name, tag_name in interested_tag_tuples:
-            keywords = lg_utils.get_keywords_from_tagged_record(self.chars[1:-1], tag_name)
+        for col_name in interested_tags:
+            keywords = lg_utils.get_keywords_from_tagged_record(self.chars[1:-1], col_name)
             tag_res_dict[col_name] = keywords
         return tag_res_dict
         
