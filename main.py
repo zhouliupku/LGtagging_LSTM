@@ -11,67 +11,53 @@ import numpy as np
 import pandas as pd
 from torch import optim
 
-from DataStructures import Page
 from model import LSTMTagger
+from config import NULL_TAG, INS_TAG, EOS_TAG
 from Encoders import XEncoder, YEncoder
+from data_load import XYDataLoader, HtmlDataLoader
 import lg_utils
 
-def load_data(text_filename, tag_filename, mode):
-    """
-    return a list of Page instances
-    """
-    with open(text_filename, 'r', encoding="utf8") as txtfile:
-        lines = txtfile.readlines()
-    if mode == "train":
-        df = pd.read_excel(tag_filename)
-    elif mode == "test":
-        df = None
-    else:
-        raise ValueError("Unsupported mode: {}".format(mode))
-    pages = []
-    for line in lines:
-        if '【' not in line or '】' not in line:
-            continue
-        pages.append(Page(line, df, mode, interested_tag_tuples))
-    return pages
-
-      
 if __name__ == "__main__":
     #TODO: argparse
     # I/O settings
-    INPUT_PATH = os.path.join(os.getcwd(), "LSTMdata")
     OUTPUT_PATH = os.path.join(os.getcwd(), "Autoparse")
     MODEL_PATH = os.path.join(os.getcwd(), "models")
     PAGE_MODEL_PATH = os.path.join(MODEL_PATH, "page_model.pt")
     TAG_MODEL_PATH = os.path.join(MODEL_PATH, "tag_model.pt")
     EMBEDDING_PATH = os.path.join(os.getcwd(), "Embedding", "polyglot-zh_char.pkl")
-    NUM_SECTION_TAGGED, NUM_SECTION_UNTAGGED = 2, 1
-    tagged_filelist = [(os.path.join(INPUT_PATH, "textTraining{}.txt".format(i)),
-                        os.path.join(INPUT_PATH, "tagTraining{}.xlsx".format(i))) \
-                        for i in range(NUM_SECTION_TAGGED)]
-    untagged_filelist = [os.path.join(INPUT_PATH, "textTest{}.txt".format(i))
-                        for i in range(NUM_SECTION_UNTAGGED)]
+    SOURCE_TYPE = "html"
         
     # Training settings
     N_EPOCH = 30
     N_CHECKPOINT = 2
+    N_PAGE_TRAIN = 10
+    N_PAGE_TEST = 1
     LEARNING_RATE = 0.3
-    N_CV_PERC = 0.5
+    CV_PERC = 0.1
     NEED_TRAIN_MODEL = True
     NEED_SAVE_MODEL = True
-    EOS_TAG = 'S'
     np.random.seed(0)
     torch.manual_seed(0)
     
+    # Set up data loaders    
+    if SOURCE_TYPE == "XY":
+        loader = XYDataLoader()
+    elif SOURCE_TYPE == "html":
+        loader = HtmlDataLoader()
+    else:
+        raise ValueError
+    test_loader = XYDataLoader()
+    
     # Model hyper-parameter definition
     EMBEDDING_DIM = 64          # depending on pre-trained word embedding model
-    HIDDEN_DIM = 6
+    HIDDEN_DIM = 16
     char_encoder = XEncoder(EMBEDDING_DIM, EMBEDDING_PATH)
-    interested_tag_tuples = [("人名", 'R'), ("任職時間", 'T'), ("籍貫", 'L'),
-                             ("入仕方法", 'E')]
-    interested_tags = [item[1] for item in interested_tag_tuples]
-    page_tag_encoder = YEncoder(["N", EOS_TAG])
-    sent_tag_encoder = YEncoder(["N", "<BEG>", "<END>"] + interested_tags)
+#    interested_tags = ["人名", "任職時間", "籍貫", "入仕方法"]
+    interested_tags = [loader.get_person_tag()]
+    interested_tags.extend(["post_time"])
+#    interested_tags.extend(["任職時間"])
+    page_tag_encoder = YEncoder([INS_TAG, EOS_TAG])
+    sent_tag_encoder = YEncoder([NULL_TAG, "<BEG>", "<END>"] + interested_tags)
     page_to_sent_model = LSTMTagger(EMBEDDING_DIM, HIDDEN_DIM, page_tag_encoder.get_tag_dim())
     sent_to_tag_model = LSTMTagger(EMBEDDING_DIM, HIDDEN_DIM, 
                                    sent_tag_encoder.get_tag_dim(), bidirectional=True)
@@ -79,20 +65,13 @@ if __name__ == "__main__":
     tag_optimizer = optim.SGD(sent_to_tag_model.parameters(), lr=LEARNING_RATE)
     
     # Load training, CV and testing data
-    pages_tagged = []
-    for txt_filename, db_filename in tagged_filelist:
-        pages_tagged.extend(load_data(txt_filename, db_filename, "train"))
-    n_cv = int(N_CV_PERC * len(pages_tagged))
-    index_permuted = np.random.permutation(len(pages_tagged))
-    pages_train = [pages_tagged[i] for i in index_permuted[:(len(pages_tagged)-n_cv)]]
-    pages_cv = [pages_tagged[i] for i in index_permuted[(len(pages_tagged)-n_cv):]]
-    print("Loaded {} pages for training.".format(len(pages_train)))
-    print("Loaded {} pages for cross validation.".format(len(pages_cv)))
-    pages_test = []
-    for txt_filename in untagged_filelist:
-        pages_test.extend(load_data(txt_filename, None, "test"))
-    print("Loaded {} pages for testing.".format(len(pages_test)))
-    
+    pages_train, pages_cv, records_train, records_cv = loader.load_data(interested_tags,
+                                                                    "train",
+                                                                    N_PAGE_TRAIN,
+                                                                    cv_perc=CV_PERC)
+    pages_test, _ = test_loader.load_data(interested_tags, 
+                                            "test",
+                                            N_PAGE_TEST)
     # Load models if it was previously saved and want to continue
     if os.path.exists(PAGE_MODEL_PATH) and not NEED_TRAIN_MODEL:
         page_to_sent_model.load_state_dict(torch.load(PAGE_MODEL_PATH))
@@ -103,17 +82,17 @@ if __name__ == "__main__":
     
     # Training
     # Step 1. Data preparation
-    page_to_sent_training_data = lg_utils.get_page_data_from_pages(pages_train,
+    page_to_sent_training_data = lg_utils.get_data_from_samples(pages_train,
                                                                    char_encoder,
                                                                    page_tag_encoder)
-    page_to_sent_cv_data = lg_utils.get_page_data_from_pages(pages_cv,
+    page_to_sent_cv_data = lg_utils.get_data_from_samples(pages_cv,
                                                              char_encoder,
                                                              page_tag_encoder)
     page_to_sent_test_data = [p.get_x(char_encoder) for p in pages_test]
-    sent_to_tag_training_data = lg_utils.get_sent_data_from_pages(pages_train,
+    sent_to_tag_training_data = lg_utils.get_data_from_samples(records_train,
                                                                   char_encoder,
                                                                   sent_tag_encoder)
-    sent_to_tag_cv_data = lg_utils.get_sent_data_from_pages(pages_cv,
+    sent_to_tag_cv_data = lg_utils.get_data_from_samples(records_cv,
                                                             char_encoder,
                                                             sent_tag_encoder)
     
@@ -134,27 +113,20 @@ if __name__ == "__main__":
     # Evaluate on test set
     # Step 1. using page_to_sent_model, parse pages to sentences
     tag_seq_list = page_to_sent_model.evaluate_model(page_to_sent_test_data, 
-                                                     page_tag_encoder)
+                                                     page_tag_encoder)  # "NNSNS.."
     sent_to_tag_test_data = []
+    records = []
     for p, pl in zip(pages_test, lg_utils.get_sent_len_for_pages(tag_seq_list, EOS_TAG)):
-        p.separate_sentence(pl)
-        for r in p.get_records():
-            sent_to_tag_test_data.append(r.get_x(char_encoder))
+        rs = p.separate_sentence(pl)
+        records.extend(rs)
+        sent_to_tag_test_data.extend([r.get_x(char_encoder) for r in rs])
             
     # Step 2. using sent_to_tag_model, tag each sentence
     tagged_sent = sent_to_tag_model.evaluate_model(sent_to_tag_test_data,
                                                    sent_tag_encoder)
-    assert len(tagged_sent) == sum([len(p.get_records()) for p in pages_test])
-    for p in pages_test:
-        num_records = len(p.get_records())
-        p.tag_records(tagged_sent[:num_records])
-        tagged_sent = tagged_sent[num_records:]
-        p.print_sample_records(3)
-        
-    # Step 3. Save results to csv files
-    tagged_result = pd.DataFrame(columns=[item[0] for item in interested_tag_tuples])
-    for p in pages_test:
-        for r in p.get_records():
-            tagged_result = tagged_result.append(r.get_tag_res_dict(interested_tag_tuples),
+    tagged_result = pd.DataFrame(columns=interested_tags)
+    for record, tag_list in zip(records, tagged_sent):
+        record.set_tag(tag_list)
+        tagged_result = tagged_result.append(record.get_tag_res_dict(interested_tags),
                                                  ignore_index=True)
     tagged_result.to_excel(os.path.join(OUTPUT_PATH, "test.xlsx"), index=False)

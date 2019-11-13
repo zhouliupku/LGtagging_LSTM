@@ -43,8 +43,8 @@ class XEncoder(Encoder):
 
 class YEncoder(Encoder):
     def __init__(self, tag_list):
-        self.tag_dict = dict()
-        self.tag_index_dict  = dict()
+        self.tag_dict = dict()      # int -> tag
+        self.tag_index_dict = dict()       # tag -> int
         for x,y in enumerate(tag_list):
             self.tag_dict[y] = x
             self.tag_index_dict[x] = y
