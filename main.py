@@ -28,12 +28,12 @@ if __name__ == "__main__":
     SOURCE_TYPE = "html"
         
     # Training settings
-    N_EPOCH = 30
-    N_CHECKPOINT = 2
-    N_PAGE_TRAIN = 10
+    N_EPOCH = 200
+    N_CHECKPOINT = 10
+    N_PAGE_TRAIN = 15
     N_PAGE_TEST = 1
-    LEARNING_RATE = 0.3
-    CV_PERC = 0.1
+    LEARNING_RATE = 0.2
+    CV_PERC = 0.2
     NEED_TRAIN_MODEL = True
     NEED_SAVE_MODEL = True
     np.random.seed(0)
@@ -50,7 +50,7 @@ if __name__ == "__main__":
     
     # Model hyper-parameter definition
     EMBEDDING_DIM = 64          # depending on pre-trained word embedding model
-    HIDDEN_DIM = 16
+    HIDDEN_DIM = 24
     char_encoder = XEncoder(EMBEDDING_DIM, EMBEDDING_PATH)
 #    interested_tags = ["人名", "任職時間", "籍貫", "入仕方法"]
     interested_tags = [loader.get_person_tag()]

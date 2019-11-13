@@ -24,8 +24,8 @@ def random_separate(xs, perc):
     """
     n1 = int(perc * len(xs))
     index_permuted = np.random.permutation(len(xs))
-    x1 = [xs[i] for i in index_permuted[:(len(xs)-n1)]]
-    x2 = [xs[i] for i in index_permuted[(len(xs)-n1):]]
+    x1 = [xs[i] for i in index_permuted[:n1]]
+    x2 = [xs[i] for i in index_permuted[n1:]]
     return x1, x2
 
 def modify_tag_seq(text, tag_seq, keyword, tagname):
