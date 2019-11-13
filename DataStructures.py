@@ -6,54 +6,14 @@ Created on Sun Oct 20 15:55:30 2019
 """
 
 import lg_utils
+from config import INS_TAG, EOS_TAG
 
 class Page(object):
     def __init__(self, pid, txt, eos_idx):
         self.pid = pid
         self.txt = txt
         self.eos_idx = eos_idx
-    
-    def fill_with_xy_file(self, line, df, mode, interested_tags):
-        line = line.split('【')[1].strip().split('】')
-        self.page_id = int(line[0])
-        self.orig_text = line[1]
-        self.interested_tags = interested_tags
-        if mode == "train":
-            subdf = df[df["Page No."] == self.page_id]
-            self.records = self.create_records(subdf, self.interested_tags)
-            self.is_sentence_separated = True
-        elif mode == "test":
-            self.records = []
-            self.is_sentence_separated = False
-        else:
-            raise ValueError("Unsupported mode:" + str(mode))
-    
-    def create_records(self, df, interested_tags):
-        """
-        Create a list of Record objects by parsing with self.orig_text and df
-        """
-        records = []
-        texts = []
-        tags = []
-        last_cutoff = 0
-        for _, row in df.iterrows():
-            name = lg_utils.convert_to_orig(row["人名"])
-            if not name in self.orig_text:
-                raise ValueError("Name {} not in original text!".format(name))
-            cutoff = self.orig_text.find(name)
-            texts.append(self.orig_text[last_cutoff:cutoff])
-            tags.append(row)
-            last_cutoff = cutoff
-        texts.append(self.orig_text[last_cutoff:])
-        for idx, data in enumerate(zip(texts[1:], tags)):
-            rec = Record()
-            rec.fill_from_xy(idx, data, interested_tags)
-            records.append(rec)
-        return records
-#    
-#    def get_records(self):
-#        return self.records
-#    
+        
     def separate_sentence(self, parsed_sent_len):
         """
         Separate page to sentences according to parsed_sent_len, list of int
@@ -67,18 +27,6 @@ class Page(object):
             records.append(Record(text, None))
             head_char_idx += sent_len
         return records
-#        
-#        # Step 2. Set flag to indicate that separation is done
-#        self.is_sentence_separated = True
-#        
-#    def tag_records(self, tag_sequences):
-#        for record, tag_seq in zip(self.get_records(), tag_sequences):
-#            record.set_tag(tag_seq)
-#            
-#    def print_sample_records(self, n_sample):
-#        print("Page {}:".format(self.page_id))
-#        for r in self.records[0:n_sample]:
-#            r.print_tag_results()
         
     def get_x(self, encoder):
         """
@@ -90,9 +38,9 @@ class Page(object):
         """
         get y sequence as tensor
         """
-        tags = ['N' for i in range(len(self.txt))]
+        tags = [INS_TAG for i in range(len(self.txt))]
         for i in self.eos_idx:
-            tags[i] = 'S'
+            tags[i] = EOS_TAG
         return encoder.encode(tags)
 
             
@@ -108,12 +56,6 @@ class Record(object):
         self.chars = [CharSample(c, t) for c, t in zip(self.orig_text, self.orig_tags)]
         self.chars = [CharSample("<S>", "<BEG>")] + self.chars
         self.chars = self.chars + [CharSample("</S>", "<END>")]
-#        
-#    def get_orig_len(self):
-#        return len(self.orig_text)
-#    
-#    def get_orig_text(self):
-#        return self.orig_text
 #    
     def set_tag(self, tag_seq):
         assert len(tag_seq) == len(self.chars)

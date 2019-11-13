@@ -12,8 +12,9 @@ import pandas as pd
 from torch import optim
 
 from model import LSTMTagger
+from config import NULL_TAG, INS_TAG, EOS_TAG
 from Encoders import XEncoder, YEncoder
-from data_load import XYDataLoader
+from data_load import XYDataLoader, HtmlDataLoader
 import lg_utils
 
 if __name__ == "__main__":
@@ -24,29 +25,39 @@ if __name__ == "__main__":
     PAGE_MODEL_PATH = os.path.join(MODEL_PATH, "page_model.pt")
     TAG_MODEL_PATH = os.path.join(MODEL_PATH, "tag_model.pt")
     EMBEDDING_PATH = os.path.join(os.getcwd(), "Embedding", "polyglot-zh_char.pkl")
-    SOURCE_TYPE = "xy"
+    SOURCE_TYPE = "html"
         
     # Training settings
-    N_EPOCH = 25
+    N_EPOCH = 30
     N_CHECKPOINT = 2
-    N_PAGE_TRAIN = 1
+    N_PAGE_TRAIN = 10
     N_PAGE_TEST = 1
     LEARNING_RATE = 0.3
-    CV_PERC = 0.2
+    CV_PERC = 0.1
     NEED_TRAIN_MODEL = True
     NEED_SAVE_MODEL = True
-    EOS_TAG = 'S'
     np.random.seed(0)
     torch.manual_seed(0)
     
+    # Set up data loaders    
+    if SOURCE_TYPE == "XY":
+        loader = XYDataLoader()
+    elif SOURCE_TYPE == "html":
+        loader = HtmlDataLoader()
+    else:
+        raise ValueError
+    test_loader = XYDataLoader()
+    
     # Model hyper-parameter definition
     EMBEDDING_DIM = 64          # depending on pre-trained word embedding model
-    HIDDEN_DIM = 6
+    HIDDEN_DIM = 16
     char_encoder = XEncoder(EMBEDDING_DIM, EMBEDDING_PATH)
 #    interested_tags = ["人名", "任職時間", "籍貫", "入仕方法"]
-    interested_tags = ["人名", "任職時間"]
-    page_tag_encoder = YEncoder(["N", EOS_TAG])
-    sent_tag_encoder = YEncoder(["N", "<BEG>", "<END>"] + interested_tags)
+    interested_tags = [loader.get_person_tag()]
+    interested_tags.extend(["post_time"])
+#    interested_tags.extend(["任職時間"])
+    page_tag_encoder = YEncoder([INS_TAG, EOS_TAG])
+    sent_tag_encoder = YEncoder([NULL_TAG, "<BEG>", "<END>"] + interested_tags)
     page_to_sent_model = LSTMTagger(EMBEDDING_DIM, HIDDEN_DIM, page_tag_encoder.get_tag_dim())
     sent_to_tag_model = LSTMTagger(EMBEDDING_DIM, HIDDEN_DIM, 
                                    sent_tag_encoder.get_tag_dim(), bidirectional=True)
@@ -54,12 +65,11 @@ if __name__ == "__main__":
     tag_optimizer = optim.SGD(sent_to_tag_model.parameters(), lr=LEARNING_RATE)
     
     # Load training, CV and testing data
-    loader = XYDataLoader()
     pages_train, pages_cv, records_train, records_cv = loader.load_data(interested_tags,
                                                                     "train",
                                                                     N_PAGE_TRAIN,
                                                                     cv_perc=CV_PERC)
-    pages_test, _ = loader.load_data(interested_tags, 
+    pages_test, _ = test_loader.load_data(interested_tags, 
                                             "test",
                                             N_PAGE_TEST)
     # Load models if it was previously saved and want to continue
@@ -72,17 +82,17 @@ if __name__ == "__main__":
     
     # Training
     # Step 1. Data preparation
-    page_to_sent_training_data = lg_utils.get_data_from_pages(pages_train,
+    page_to_sent_training_data = lg_utils.get_data_from_samples(pages_train,
                                                                    char_encoder,
                                                                    page_tag_encoder)
-    page_to_sent_cv_data = lg_utils.get_data_from_pages(pages_cv,
+    page_to_sent_cv_data = lg_utils.get_data_from_samples(pages_cv,
                                                              char_encoder,
                                                              page_tag_encoder)
     page_to_sent_test_data = [p.get_x(char_encoder) for p in pages_test]
-    sent_to_tag_training_data = lg_utils.get_data_from_pages(records_train,
+    sent_to_tag_training_data = lg_utils.get_data_from_samples(records_train,
                                                                   char_encoder,
                                                                   sent_tag_encoder)
-    sent_to_tag_cv_data = lg_utils.get_data_from_pages(records_cv,
+    sent_to_tag_cv_data = lg_utils.get_data_from_samples(records_cv,
                                                             char_encoder,
                                                             sent_tag_encoder)
     

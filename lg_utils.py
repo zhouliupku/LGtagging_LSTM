@@ -8,14 +8,13 @@ Created on Mon Oct 21 00:11:24 2019
 import re
 import numpy as np
 
-# space char in original text in LoGaRT
-SPACE = '○'
+from config import NULL_TAG, PADDING_CHAR
 
 def convert_to_orig(s):
     """
     Convert string from database to corresponding original text
     """
-    return s.replace(' ', SPACE)
+    return s.replace(' ', PADDING_CHAR)
 
 
 def random_separate(xs, perc):
@@ -41,7 +40,7 @@ def modify_tag_seq(text, tag_seq, keyword, tagname):
     begin_locs = [loc.start() for loc in re.finditer(keyword, text)]
     for begin_loc in begin_locs:
         for loc in range(begin_loc, begin_loc + len(keyword)):
-            if tag_seq[loc] != 'N':
+            if tag_seq[loc] != NULL_TAG:
                 raise ValueError("Same char cannot bear more than one tag!")
             tag_seq[loc] = tagname
     
@@ -86,5 +85,5 @@ def get_keywords_from_tagged_record(char_samples, tag_name):
         res.append(current_keyword)
     return res
 
-def get_data_from_pages(samples, x_encoder, y_encoder):
+def get_data_from_samples(samples, x_encoder, y_encoder):
     return [(p.get_x(x_encoder), p.get_y(y_encoder)) for p in samples]
