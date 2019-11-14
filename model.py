@@ -5,6 +5,7 @@ Created on Mon Oct 21 17:45:36 2019
 @author: Zhou
 """
 
+import os
 import torch
 from torch import nn
 
@@ -35,7 +36,8 @@ class LSTMTagger(nn.Module):
         return tag_scores
 
     def train_model(self, training_data, cv_data,
-                    optimizer, loss_type, n_epoch, n_check):
+                    optimizer, loss_type, n_epoch, n_check, 
+                    n_save, save_path):
         if loss_type == "NLL":
             loss_function = nn.NLLLoss()
         else:
@@ -55,6 +57,11 @@ class LSTMTagger(nn.Module):
                         tag_scores = self.forward(sentence)
                         loss = loss_function(tag_scores, targets)
                     self.logger.info("CV Loss = {}".format(loss.item()))
+            if epoch % n_save == 0:
+                torch.save(self.state_dict(), 
+                           os.path.join(save_path, "epoch{}.pt".format(epoch)))
+        torch.save(self.state_dict(), 
+                   os.path.join(save_path, "final.pt"))
 
     def evaluate_model(self, test_data, y_encoder):
         """

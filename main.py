@@ -24,27 +24,28 @@ if __name__ == "__main__":
     # I/O settings
     OUTPUT_PATH = os.path.join(os.getcwd(), "Autoparse")
     MODEL_PATH = os.path.join(os.getcwd(), "models")
-    PAGE_MODEL_PATH = os.path.join(MODEL_PATH, "page_model.pt")
-    RECORD_MODEL_PATH = os.path.join(MODEL_PATH, "record_model.pt")
+    PAGE_MODEL_PATH = os.path.join(MODEL_PATH, "page_model")
+    RECORD_MODEL_PATH = os.path.join(MODEL_PATH, "record_model")
     EMBEDDING_PATH = os.path.join(os.getcwd(), "Embedding", "polyglot-zh_char.pkl")
     SOURCE_TYPE = "html"
         
     # Training settings
-    N_PAGE_TRAIN = 10
-    N_PAGE_TEST = 1
-    CV_PERC = 0.3
+    N_SECTION_TRAIN = 40
+    N_SECTION_TEST = 1
+    CV_PERC = 0.5
     
-    N_EPOCH_PAGE = 100
+    N_EPOCH_PAGE = 60
     N_CHECKPOINT_PAGE = 1
-    LEARNING_RATE_PAGE = 0.5
-    HIDDEN_DIM_PAGE = 24
-    N_EPOCH_RECORD = 100
+    N_SAVE_PAGE = 5
+    LEARNING_RATE_PAGE = 0.25
+    HIDDEN_DIM_PAGE = 16
+    N_EPOCH_RECORD = 60
     N_CHECKPOINT_RECORD = 1
+    N_SAVE_RECORD = 5
     LEARNING_RATE_RECORD = 0.3
-    HIDDEN_DIM_RECORD = 24
+    HIDDEN_DIM_RECORD = 16
     
     NEED_TRAIN_MODEL = True
-    NEED_SAVE_MODEL = True
     np.random.seed(0)
     torch.manual_seed(0)
     
@@ -86,17 +87,17 @@ if __name__ == "__main__":
     # Load training, CV and testing data
     pages_train, pages_cv, records_train, records_cv = loader.load_data(interested_tags,
                                                                     "train",
-                                                                    N_PAGE_TRAIN,
+                                                                    N_SECTION_TRAIN,
                                                                     cv_perc=CV_PERC)
     pages_test, _ = test_loader.load_data(interested_tags, 
                                             "test",
-                                            N_PAGE_TEST)
+                                            N_SECTION_TEST)
     # Load models if it was previously saved and want to continue
     if os.path.exists(PAGE_MODEL_PATH) and not NEED_TRAIN_MODEL:
-        page_model.load_state_dict(torch.load(PAGE_MODEL_PATH))
+        page_model.load_state_dict(torch.load(os.path.join(PAGE_MODEL_PATH, "final.pt")))
         page_model.eval()
     if os.path.exists(RECORD_MODEL_PATH) and not NEED_TRAIN_MODEL:
-        record_model.load_state_dict(torch.load(RECORD_MODEL_PATH))
+        record_model.load_state_dict(torch.load(os.path.join(RECORD_MODEL_PATH, "final.pt")))
         record_model.eval()
     
     # Training
@@ -120,16 +121,13 @@ if __name__ == "__main__":
         # 2.a Train model to parse pages into sentences
         page_model.train_model(page_training_data, page_cv_data, 
                                page_optimizer, "NLL",
-                               N_EPOCH_PAGE, N_CHECKPOINT_PAGE)
+                               N_EPOCH_PAGE, N_CHECKPOINT_PAGE,
+                               N_SAVE_PAGE, PAGE_MODEL_PATH)
         # 2.b Train model to tag sentences
         record_model.train_model(record_training_data, record_cv_data, 
                                  record_optimizer, "NLL",
-                                 N_EPOCH_RECORD, N_CHECKPOINT_RECORD)
-    
-    # Save models
-    if NEED_SAVE_MODEL:
-        torch.save(page_model.state_dict(), PAGE_MODEL_PATH)
-        torch.save(record_model.state_dict(), RECORD_MODEL_PATH)
+                                 N_EPOCH_RECORD, N_CHECKPOINT_RECORD,
+                                 N_SAVE_RECORD, RECORD_MODEL_PATH)
     
     # Evaluate on test set
     # Step 1. using page_to_sent_model, parse pages to sentences
