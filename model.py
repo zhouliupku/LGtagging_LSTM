@@ -14,12 +14,19 @@ class LSTMTagger(nn.Module):
                  bidirectional=False):
         super(LSTMTagger, self).__init__()
         self.logger = logger
+        self.embedding_dim = embedding_dim
         self.hidden_dim = hidden_dim
-        self.lstm = nn.LSTM(embedding_dim, hidden_dim, bidirectional=bidirectional)
-        if bidirectional:
-            self.hidden2tag = nn.Linear(hidden_dim*2, tag_dim)
+        self.tag_dim = tag_dim
+        self.bidirectional = bidirectional
+        self.model_setup()
+        
+    def model_setup(self):
+        self.lstm = nn.LSTM(self.embedding_dim, self.hidden_dim,
+                            bidirectional=self.bidirectional)
+        if self.bidirectional:
+            self.hidden2tag = nn.Linear(self.hidden_dim*2, self.tag_dim)
         else:
-            self.hidden2tag = nn.Linear(hidden_dim, tag_dim)
+            self.hidden2tag = nn.Linear(self.hidden_dim, self.tag_dim)
 
     def forward(self, sentence):
         lstm_out, _ = self.lstm(sentence.view(sentence.shape[0], 1, -1))
@@ -62,4 +69,28 @@ class LSTMTagger(nn.Module):
                 res = y_encoder.decode(tag_scores.max(dim=1).indices)
                 result_list.append(res)
             return result_list
+       
         
+class TwoLayerLSTMTagger(LSTMTagger):
+        
+    def model_setup(self):
+        self.lstm1 = nn.LSTM(self.embedding_dim, self.hidden_dim,
+                             bidirectional=self.bidirectional)
+        self.lstm2 = nn.LSTM(self.hidden_dim, self.hidden_dim,
+                             bidirectional=self.bidirectional)
+        if self.bidirectional:
+            self.lstm2 = nn.LSTM(self.hidden_dim*2, self.hidden_dim,
+                                 bidirectional=self.bidirectional)
+            self.hidden2tag = nn.Linear(self.hidden_dim*2, self.tag_dim)
+        else:
+            self.lstm2 = nn.LSTM(self.hidden_dim, self.hidden_dim,
+                                 bidirectional=self.bidirectional)
+            self.hidden2tag = nn.Linear(self.hidden_dim, self.tag_dim)
+
+    def forward(self, sentence):
+        lstm_out1, _ = self.lstm1(sentence.view(sentence.shape[0], 1, -1))
+        lstm_out2, _ = self.lstm2(lstm_out1.view(sentence.shape[0], 1, -1))
+        tag_space = self.hidden2tag(lstm_out2.view(sentence.shape[0], -1))
+        tag_scores = nn.functional.log_softmax(tag_space, dim=1)
+        return tag_scores
+    
