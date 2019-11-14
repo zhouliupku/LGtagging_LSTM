@@ -10,6 +10,8 @@ import torch
 import numpy as np
 import pandas as pd
 from torch import optim
+import datetime
+import logging
 
 from model import LSTMTagger
 from config import NULL_TAG, INS_TAG, EOS_TAG
@@ -28,16 +30,26 @@ if __name__ == "__main__":
     SOURCE_TYPE = "html"
         
     # Training settings
-    N_EPOCH = 200
-    N_CHECKPOINT = 10
-    N_PAGE_TRAIN = 15
+    N_EPOCH = 100
+    N_CHECKPOINT = 1
+    N_PAGE_TRAIN = 10
     N_PAGE_TEST = 1
-    LEARNING_RATE = 0.2
-    CV_PERC = 0.2
+    LEARNING_RATE = 0.3
+    CV_PERC = 0.4
     NEED_TRAIN_MODEL = True
     NEED_SAVE_MODEL = True
     np.random.seed(0)
     torch.manual_seed(0)
+    
+    # Logging
+    curr_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    logging.basicConfig(filename=os.path.join("log",
+                                              "run{}.log".format(curr_time)),
+                        format='%(asctime)s %(message)s', 
+                        filemode='w') 
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    logger.info("Started training at {}".format(curr_time))
     
     # Set up data loaders    
     if SOURCE_TYPE == "XY":
@@ -58,8 +70,9 @@ if __name__ == "__main__":
 #    interested_tags.extend(["任職時間"])
     page_tag_encoder = YEncoder([INS_TAG, EOS_TAG])
     sent_tag_encoder = YEncoder([NULL_TAG, "<BEG>", "<END>"] + interested_tags)
-    page_to_sent_model = LSTMTagger(EMBEDDING_DIM, HIDDEN_DIM, page_tag_encoder.get_tag_dim())
-    sent_to_tag_model = LSTMTagger(EMBEDDING_DIM, HIDDEN_DIM, 
+    page_to_sent_model = LSTMTagger(logger, EMBEDDING_DIM, HIDDEN_DIM,
+                                    page_tag_encoder.get_tag_dim())
+    sent_to_tag_model = LSTMTagger(logger, EMBEDDING_DIM, HIDDEN_DIM, 
                                    sent_tag_encoder.get_tag_dim(), bidirectional=True)
     sent_optimizer = optim.SGD(page_to_sent_model.parameters(), lr=LEARNING_RATE)
     tag_optimizer = optim.SGD(sent_to_tag_model.parameters(), lr=LEARNING_RATE)

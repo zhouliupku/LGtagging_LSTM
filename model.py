@@ -10,9 +10,10 @@ from torch import nn
 
 class LSTMTagger(nn.Module):
 
-    def __init__(self, embedding_dim, hidden_dim, tag_dim,
+    def __init__(self, logger, embedding_dim, hidden_dim, tag_dim,
                  bidirectional=False):
         super(LSTMTagger, self).__init__()
+        self.logger = logger
         self.hidden_dim = hidden_dim
         self.lstm = nn.LSTM(embedding_dim, hidden_dim, bidirectional=bidirectional)
         if bidirectional:
@@ -40,13 +41,13 @@ class LSTMTagger(nn.Module):
                 loss.backward(retain_graph=True)
                 optimizer.step()
             if epoch % n_check == 0:
-                print("Epoch {}".format(epoch))
-                print("Training Loss = {}".format(loss.item()))
+                self.logger.info("Epoch {}".format(epoch))
+                self.logger.info("Training Loss = {}".format(loss.item()))
                 with torch.no_grad():
                     for sentence, targets in cv_data:
                         tag_scores = self.forward(sentence)
                         loss = loss_function(tag_scores, targets)
-                    print("CV Loss = {}".format(loss.item()))
+                    self.logger.info("CV Loss = {}".format(loss.item()))
 
     def evaluate_model(self, test_data, y_encoder):
         """
