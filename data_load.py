@@ -140,7 +140,6 @@ class HtmlDataLoader(DataLoader):
         with open(html_filename, 'r', encoding = "utf8") as file:
             lines = file.readlines()
             
-        # TODO: Remove duplicate code
         pages = []
         records = []
         all_text, all_tags = self.format_raw_data(lines)
@@ -148,38 +147,77 @@ class HtmlDataLoader(DataLoader):
         page_texts = all_text.split('【')   #list of str, except the first str, all other str starts with "】"
         rest_tags = rest_tags[len(page_texts[0]):]    
         for page_text in page_texts[1:]:
+            
             candi = page_text.split('】')
             if len(candi) != 2:
                 raise ValueError
             pid, txt = int(candi[0]), candi[1]
             page_tags = rest_tags[(len(candi[0]) + 2):(len(candi[0]) + 2 + len(txt))]
             rest_tags = rest_tags[(len(candi[0]) + 2 + len(txt)):]
+            
             eos_idx = []
-            last_tag_is_person = False
-            is_preface = True
-            curr_idx = 0
-            curr_txt = ""
-            curr_tags = []
-            for char, tag in zip(txt, page_tags):
-                if tag == self.get_person_tag():
-                    if not is_preface and not last_tag_is_person:      # End of a record
-                        records.append(Record(curr_txt, curr_tags))
-                        
-                    is_preface = False
-                    last_tag_is_person = True
-                    if curr_idx > 0:
-                        eos_idx.append(curr_idx)
-                if is_preface:
+            
+            for i, tag in enumerate(page_tags):
+                # EOS is the index just before a name' beginning
+#                if page_tags[0] == self.get_person_tag():
+                if i == 0 and tag == self.get_person_tag():
                     continue
-                # Inside a record
-                curr_txt += char
-                if tag not in interested_tags:  # ignore tags in training set if not interested
-                    tag = NULL_TAG
-                curr_tags.append(tag)
-                curr_idx += 1
-            eos_idx.append(len(txt) - 1)
-            records.append(Record(curr_txt, curr_tags))
-            pages.append(Page(pid, txt, eos_idx))
+                if tag == self.get_person_tag() and page_tags[i-1] != self.get_person_tag():
+                    eos_idx.append(i-1)
+            eos_idx.append(len(txt)-1)
+            page = Page(pid, txt, eos_idx)
+            record_txt_len = page.get_sep_len()
+            
+            head_char_idx = 0
+            records_in_page = []
+            for sent_len in record_txt_len:
+                text = page.txt[head_char_idx : (head_char_idx + sent_len)]
+                tags = page_tags[head_char_idx : (head_char_idx + sent_len)]
+                # substitution
+                record_tag = []
+                for tag in tags:
+                    if tag in interested_tags:
+                        record_tag.append(tag)
+                    else:
+                        record_tag.append(NULL_TAG)
+                records_in_page.append(Record(text, record_tag))
+                head_char_idx += sent_len
+            records.extend(records_in_page)
+            pages.append(page)
+#            eos_idx = []
+#            last_tag_is_person = False
+#            is_preface = True
+#            curr_idx = 0
+#            curr_txt = ""
+#            curr_tags = []
+#            for char, tag in zip(txt, page_tags):
+#                if tag == self.get_person_tag():
+#                    if not is_preface and not last_tag_is_person:      # End of a record
+#                        records.append(Record(curr_txt, curr_tags))
+#                        
+#                    is_preface = False
+#                    last_tag_is_person = True
+#                    if curr_idx > 0:
+#                        eos_idx.append(curr_idx)
+#                if is_preface:
+#                    continue
+#                # Inside a record
+#                curr_txt += char
+#                if tag not in interested_tags:  # ignore tags in training set if not interested
+#                    tag = NULL_TAG
+#                curr_tags.append(tag)
+#                curr_idx += 1
+#            eos_idx.append(len(txt) - 1)
+            
+            
+            
+#            records.append(Record(record_txt, record_tags))
+#            pages.append(Page(pid, txt, eos_idx))
+#            page = pages[-1]
+#            print(page.txt)
+#            print(page.eos_idx)
+            
+#            print([page.eos_idx[0]] + [x-y for x,y in zip(page.eos_idx[1:], page.eos_idx[:-1])])
         return pages, records
             
     def get_file(self, mode, n):
@@ -202,7 +240,6 @@ class HtmlDataLoader(DataLoader):
         for line in lines:
             soup = BS(line, "html.parser")
             with_tag_item = list(soup.find_all(recursive=False))
-            
             result = []
             without_tag_item = []
             rest_contents = str(soup)

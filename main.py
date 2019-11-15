@@ -30,7 +30,7 @@ if __name__ == "__main__":
     SOURCE_TYPE = "html"
         
     # Training settings
-    N_SECTION_TRAIN = 40
+    N_SECTION_TRAIN = 30
     N_SECTION_TEST = 1
     CV_PERC = 0.5
     
@@ -38,12 +38,12 @@ if __name__ == "__main__":
     N_CHECKPOINT_PAGE = 1
     N_SAVE_PAGE = 5
     LEARNING_RATE_PAGE = 0.25
-    HIDDEN_DIM_PAGE = 16
+    HIDDEN_DIM_PAGE = 12
     N_EPOCH_RECORD = 60
     N_CHECKPOINT_RECORD = 1
     N_SAVE_RECORD = 5
     LEARNING_RATE_RECORD = 0.3
-    HIDDEN_DIM_RECORD = 16
+    HIDDEN_DIM_RECORD = 12
     
     NEED_TRAIN_MODEL = True
     np.random.seed(0)
@@ -92,6 +92,8 @@ if __name__ == "__main__":
     pages_test, _ = test_loader.load_data(interested_tags, 
                                             "test",
                                             N_SECTION_TEST)
+    
+    
     # Load models if it was previously saved and want to continue
     if os.path.exists(PAGE_MODEL_PATH) and not NEED_TRAIN_MODEL:
         page_model.load_state_dict(torch.load(os.path.join(PAGE_MODEL_PATH, "final.pt")))
@@ -109,6 +111,7 @@ if __name__ == "__main__":
                                                   char_encoder,
                                                   page_tag_encoder)
     page_test_data = [p.get_x(char_encoder) for p in pages_test]
+    
     record_training_data = lg_utils.get_data_from_samples(records_train,
                                                           char_encoder,
                                                           record_tag_encoder)

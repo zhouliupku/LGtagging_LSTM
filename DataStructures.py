@@ -42,6 +42,13 @@ class Page(object):
         for i in self.eos_idx:
             tags[i] = EOS_TAG
         return encoder.encode(tags)
+    
+    def get_sep_len(self):
+        if self.eos_idx == []:
+            return []
+        else:
+            return [self.eos_idx[0] + 1] \
+                    + [x-y for x,y in zip(self.eos_idx[1:], self.eos_idx[:-1])]
 
             
 
@@ -83,6 +90,9 @@ class Record(object):
         get y sequence as tensor
         """
         return encoder.encode([cs.get_tag() for cs in self.chars])
+    
+    def __str__(self):
+        return ''.join([c.get_char() for c in self.chars[1:-1]])
         
     
 class CharSample(object):
