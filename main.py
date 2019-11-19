@@ -6,6 +6,7 @@ Created on Sun Oct 20 22:43:13 2019
 """
 
 import os
+import re
 import torch
 import numpy as np
 import pandas as pd
@@ -30,7 +31,7 @@ if __name__ == "__main__":
     SOURCE_TYPE = "html"
         
     # Training settings
-    N_SECTION_TRAIN = 30
+    N_SECTION_TRAIN = 1#30
     N_SECTION_TEST = 1
     CV_PERC = 0.5
     
@@ -45,7 +46,8 @@ if __name__ == "__main__":
     LEARNING_RATE_RECORD = 0.3
     HIDDEN_DIM_RECORD = 12
     
-    NEED_TRAIN_MODEL = True
+    NEED_TRAIN_MODEL = False
+    USE_REGEX = True
     np.random.seed(0)
     torch.manual_seed(0)
     
@@ -122,10 +124,11 @@ if __name__ == "__main__":
     # Step 2. Model training
     if NEED_TRAIN_MODEL:
         # 2.a Train model to parse pages into sentences
-        page_model.train_model(page_training_data, page_cv_data, 
-                               page_optimizer, "NLL",
-                               N_EPOCH_PAGE, N_CHECKPOINT_PAGE,
-                               N_SAVE_PAGE, PAGE_MODEL_PATH)
+        if not USE_REGEX:
+            page_model.train_model(page_training_data, page_cv_data, 
+                                   page_optimizer, "NLL",
+                                   N_EPOCH_PAGE, N_CHECKPOINT_PAGE,
+                                   N_SAVE_PAGE, PAGE_MODEL_PATH)
         # 2.b Train model to tag sentences
         record_model.train_model(record_training_data, record_cv_data, 
                                  record_optimizer, "NLL",
@@ -134,7 +137,19 @@ if __name__ == "__main__":
     
     # Evaluate on test set
     # Step 1. using page_to_sent_model, parse pages to sentences
-    tag_seq_list = page_model.evaluate_model(page_test_data, page_tag_encoder)
+    if USE_REGEX:
+        with open(os.path.join(MODEL_PATH, "surname.txt"), 'r', encoding="utf8") as f:
+            surnames = f.readline().replace("\ufeff", '')
+        tag_seq_list = []
+        for p in pages_test:
+            tags = [INS_TAG for c in p.txt]
+            for m in re.finditer(r"○("+surnames+')', p.txt):
+                if m.start(0) > 0:
+                    tags[m.start(0)] = EOS_TAG  # no need to -1, instead drop '○' before name
+            tags[-1] = EOS_TAG
+            tag_seq_list.append(tags)
+    else:
+        tag_seq_list = page_model.evaluate_model(page_test_data, page_tag_encoder)
     record_test_data = []
     records = []
     for p, pl in zip(pages_test, lg_utils.get_sent_len_for_pages(tag_seq_list, EOS_TAG)):
@@ -147,6 +162,10 @@ if __name__ == "__main__":
     tagged_result = pd.DataFrame(columns=interested_tags)
     for record, tag_list in zip(records, tagged_sent):
         record.set_tag(tag_list)
-        tagged_result = tagged_result.append(record.get_tag_res_dict(interested_tags),
-                                                 ignore_index=True)
-    tagged_result.to_excel(os.path.join(OUTPUT_PATH, "test.xlsx"), index=False)
+        res = record.get_tag_res_dict(interested_tags)
+        res["yuanwen"] = str(record)
+        tagged_result = tagged_result.append(res, ignore_index=True)
+        
+    curr_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    tagged_result.to_excel(os.path.join(OUTPUT_PATH, "test_{}.xlsx".format(curr_time)),
+                           index=False)
