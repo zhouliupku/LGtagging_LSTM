@@ -10,6 +10,7 @@ import torch
 from torch import nn
 import matplotlib.pyplot as plt
 import datetime
+import math
 
 PLOT_PATH = os.path.join(os.getcwd(), "plot")
 
@@ -84,14 +85,15 @@ class LSTMTagger(nn.Module):
                            os.path.join(save_path, "epoch{}.pt".format(epoch)))
          
         # Plot the loss function
-        plt.plot(losses_train)
-        plt.plot(losses_cv)
+        plt.plot(list(map(math.log10, losses_train))) 
+        plt.plot(list(map(math.log10, losses_cv)))
         plt.xlabel("Epoch")
         plt.ylabel("Loss")
         plt.legend(["Train", "CV"])
         curr_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         filename = "plot"+curr_time+".png"
         plt.savefig(os.path.join(PLOT_PATH, filename))
+        plt.close()
         
         # Save final model
         torch.save(self.state_dict(), 
