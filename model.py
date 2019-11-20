@@ -8,6 +8,11 @@ Created on Mon Oct 21 17:45:36 2019
 import os
 import torch
 from torch import nn
+import matplotlib.pyplot as plt
+import datetime
+
+PLOT_PATH = os.path.join(os.getcwd(), "plot")
+
 
 class LSTMTagger(nn.Module):
 
@@ -42,24 +47,53 @@ class LSTMTagger(nn.Module):
             loss_function = nn.NLLLoss()
         else:
             raise ValueError("Unsupported loss type: {}".format(loss_type))
+            
+        losses_train = []
+        losses_cv = []
+        plt.figure(figsize=[20, 10])
+        
         for epoch in range(n_epoch):
+            # Use training data to train
+            sum_loss_train = 0
             for sentence, targets in training_data:
                 self.zero_grad()   # clear accumulated gradient before each instance
                 tag_scores = self.forward(sentence)
                 loss = loss_function(tag_scores, targets)
+                sum_loss_train += loss.item()
                 loss.backward(retain_graph=True)
                 optimizer.step()
+            losses_train.append(sum_loss_train / len(training_data))
             if epoch % n_check == 0:
                 self.logger.info("Epoch {}".format(epoch))
                 self.logger.info("Training Loss = {}".format(loss.item()))
-                with torch.no_grad():
-                    for sentence, targets in cv_data:
-                        tag_scores = self.forward(sentence)
-                        loss = loss_function(tag_scores, targets)
-                    self.logger.info("CV Loss = {}".format(loss.item()))
+                
+            # Use CV data to validate
+            with torch.no_grad():
+                sum_loss_cv = 0
+                for sentence, targets in cv_data:
+                    tag_scores = self.forward(sentence)
+                    loss = loss_function(tag_scores, targets)
+                    sum_loss_cv += loss.item()
+                losses_cv.append(sum_loss_cv / len(cv_data))
+            if epoch % n_check == 0:
+                self.logger.info("CV Loss = {}".format(loss.item()))
+                
+            # Save model snapshot
             if epoch % n_save == 0:
                 torch.save(self.state_dict(), 
                            os.path.join(save_path, "epoch{}.pt".format(epoch)))
+         
+        # Plot the loss function
+        plt.plot(losses_train)
+        plt.plot(losses_cv)
+        plt.xlabel("Epoch")
+        plt.ylabel("Loss")
+        plt.legend(["Train", "CV"])
+        curr_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        filename = "plot"+curr_time+".png"
+        plt.savefig(os.path.join(PLOT_PATH, filename))
+        
+        # Save final model
         torch.save(self.state_dict(), 
                    os.path.join(save_path, "final.pt"))
 

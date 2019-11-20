@@ -23,31 +23,32 @@ import lg_utils
 if __name__ == "__main__":
     #TODO: argparse
     # I/O settings
+    # TODO: put into config
     OUTPUT_PATH = os.path.join(os.getcwd(), "Autoparse")
     MODEL_PATH = os.path.join(os.getcwd(), "models")
     PAGE_MODEL_PATH = os.path.join(MODEL_PATH, "page_model")
     RECORD_MODEL_PATH = os.path.join(MODEL_PATH, "record_model")
     EMBEDDING_PATH = os.path.join(os.getcwd(), "Embedding", "polyglot-zh_char.pkl")
-    SOURCE_TYPE = "html"
+    SOURCE_TYPE = "XY"
         
     # Training settings
     N_SECTION_TRAIN = 1#30
     N_SECTION_TEST = 1
     CV_PERC = 0.5
     
-    N_EPOCH_PAGE = 60
+    N_EPOCH_PAGE = 30
     N_CHECKPOINT_PAGE = 1
     N_SAVE_PAGE = 5
     LEARNING_RATE_PAGE = 0.25
-    HIDDEN_DIM_PAGE = 12
-    N_EPOCH_RECORD = 60
+    HIDDEN_DIM_PAGE = 8
+    N_EPOCH_RECORD = 30
     N_CHECKPOINT_RECORD = 1
     N_SAVE_RECORD = 5
     LEARNING_RATE_RECORD = 0.3
     HIDDEN_DIM_RECORD = 12
     
-    NEED_TRAIN_MODEL = False
-    USE_REGEX = True
+    NEED_TRAIN_MODEL = True
+    USE_REGEX = False
     np.random.seed(0)
     torch.manual_seed(0)
     
@@ -61,7 +62,7 @@ if __name__ == "__main__":
     logger.setLevel(logging.DEBUG)
     logger.info("Started training at {}".format(curr_time))
     
-    # Set up data loaders    
+    # Set up data loaders
     if SOURCE_TYPE == "XY":
         loader = XYDataLoader()
     elif SOURCE_TYPE == "html":
@@ -73,14 +74,19 @@ if __name__ == "__main__":
     # Model hyper-parameter definition
     EMBEDDING_DIM = 64          # depending on pre-trained word embedding model
     char_encoder = XEncoder(EMBEDDING_DIM, EMBEDDING_PATH)
-#    interested_tags = ["人名", "任職時間", "籍貫", "入仕方法"]
     interested_tags = [loader.get_person_tag()]
-    interested_tags.extend(["post_time", "office", "jiguan"])
-#    interested_tags.extend(["任職時間"])
+    if SOURCE_TYPE == "XY":
+        interested_tags.extend(["任職時間"])
+#    interested_tags = ["人名", "任職時間", "籍貫", "入仕方法"]
+    elif SOURCE_TYPE == "html":
+        interested_tags.extend(["post_time", "office", "jiguan"])
+        
     page_tag_encoder = YEncoder([INS_TAG, EOS_TAG])
     record_tag_encoder = YEncoder([NULL_TAG, "<BEG>", "<END>"] + interested_tags)
-    page_model = TwoLayerLSTMTagger(logger, EMBEDDING_DIM, HIDDEN_DIM_PAGE,
-                                    page_tag_encoder.get_tag_dim(), bidirectional=True)
+    page_model = LSTMTagger(logger, EMBEDDING_DIM, HIDDEN_DIM_RECORD, 
+                              record_tag_encoder.get_tag_dim(), bidirectional=False)
+#    page_model = TwoLayerLSTMTagger(logger, EMBEDDING_DIM, HIDDEN_DIM_PAGE,
+#                                    page_tag_encoder.get_tag_dim(), bidirectional=True)
     record_model = LSTMTagger(logger, EMBEDDING_DIM, HIDDEN_DIM_RECORD, 
                               record_tag_encoder.get_tag_dim(), bidirectional=True)
     page_optimizer = optim.SGD(page_model.parameters(), lr=LEARNING_RATE_PAGE)
@@ -144,8 +150,7 @@ if __name__ == "__main__":
         for p in pages_test:
             tags = [INS_TAG for c in p.txt]
             for m in re.finditer(r"○("+surnames+')', p.txt):
-                if m.start(0) > 0:
-                    tags[m.start(0)] = EOS_TAG  # no need to -1, instead drop '○' before name
+                tags[m.start(0)] = EOS_TAG  # no need to -1, instead drop '○' before name
             tags[-1] = EOS_TAG
             tag_seq_list.append(tags)
     else:
