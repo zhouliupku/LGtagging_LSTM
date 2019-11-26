@@ -19,6 +19,7 @@ from config import NULL_TAG, INS_TAG, EOS_TAG
 from Encoders import XEncoder, YEncoder
 from data_load import XYDataLoader, HtmlDataLoader
 import lg_utils
+from data_save import ExcelSaver, HtmlSaver
 
 if __name__ == "__main__":
     #TODO: argparse
@@ -30,6 +31,7 @@ if __name__ == "__main__":
     RECORD_MODEL_PATH = os.path.join(MODEL_PATH, "record_model")
     EMBEDDING_PATH = os.path.join(os.getcwd(), "Embedding", "polyglot-zh_char.pkl")
     SOURCE_TYPE = "XY"
+    SAVER_TYPE = "html"
         
     # Training settings
     N_SECTION_TRAIN = 1#30
@@ -47,7 +49,7 @@ if __name__ == "__main__":
     LEARNING_RATE_RECORD = 0.5
     HIDDEN_DIM_RECORD = 8
     
-    NEED_TRAIN_MODEL = True
+    NEED_TRAIN_MODEL = False
     USE_REGEX = False
     np.random.seed(0)
     torch.manual_seed(0)
@@ -164,13 +166,15 @@ if __name__ == "__main__":
             
     # Step 2. using sent_to_tag_model, tag each sentence
     tagged_sent = record_model.evaluate_model(record_test_data, record_tag_encoder)
-    tagged_result = pd.DataFrame(columns=interested_tags)
     for record, tag_list in zip(records, tagged_sent):
         record.set_tag(tag_list)
-        res = record.get_tag_res_dict(interested_tags)
-        res["yuanwen"] = str(record)
-        tagged_result = tagged_result.append(res, ignore_index=True)
         
+    # Saving
     curr_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    tagged_result.to_excel(os.path.join(OUTPUT_PATH, "test_{}.xlsx".format(curr_time)),
-                           index=False)
+    if SAVER_TYPE == "html":
+        saver = HtmlSaver(records)
+        filename = os.path.join(OUTPUT_PATH, "test_{}.txt".format(curr_time))
+    else:
+        saver = ExcelSaver(records)
+        filename = os.path.join(OUTPUT_PATH, "test_{}.xlsx".format(curr_time))
+    saver.save(filename, interested_tags)
