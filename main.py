@@ -142,7 +142,7 @@ if __name__ == "__main__":
                                  record_optimizer, "NLL",
                                  N_EPOCH_RECORD, N_CHECKPOINT_RECORD,
                                  N_SAVE_RECORD, RECORD_MODEL_PATH)
-    
+        
     # Evaluate on test set
     # Step 1. using page_to_sent_model, parse pages to sentences
     if USE_REGEX:
@@ -168,6 +168,17 @@ if __name__ == "__main__":
     tagged_sent = record_model.evaluate_model(record_test_data, record_tag_encoder)
     for record, tag_list in zip(records, tagged_sent):
         record.set_tag(tag_list)
+    
+    # Calculate the error rate on training set
+    inputs = [r.get_x(char_encoder) for r in records_train]
+    tag_pred = record_model.evaluate_model(inputs, record_tag_encoder)
+    tag_true = [[c.get_tag() for c in r.chars] for r in records_train]
+    upstairs = [sum([p==t for p,t in zip(ps, ts)]) for ps, ts in zip(tag_pred, tag_true)]
+    downstairs = [len(r) for r in tag_pred]
+    correct_ratio = sum(upstairs) / float(sum(downstairs))
+    print(correct_ratio)
+    
+    raise RuntimeError
         
     # Saving
     curr_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")

@@ -101,7 +101,7 @@ class LSTMTagger(nn.Module):
 
     def evaluate_model(self, test_data, y_encoder):
         """
-        Take model and test data (list of strings), return list of list of tags
+        Take model and test data (list of tensors), return list of list of tags
         """
         result_list = []
         with torch.no_grad():
