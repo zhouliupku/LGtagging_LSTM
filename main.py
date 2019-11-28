@@ -170,13 +170,18 @@ if __name__ == "__main__":
         record.set_tag(tag_list)
     
     # Calculate the error rate on training set
-    inputs = [r.get_x(char_encoder) for r in records_train]
-    tag_pred = record_model.evaluate_model(inputs, record_tag_encoder)
-    tag_true = [[c.get_tag() for c in r.chars] for r in records_train]
-    upstairs = [sum([p==t for p,t in zip(ps, ts)]) for ps, ts in zip(tag_pred, tag_true)]
-    downstairs = [len(r) for r in tag_pred]
-    correct_ratio = sum(upstairs) / float(sum(downstairs))
-    print(correct_ratio)
+#    inputs = [r.get_x(char_encoder) for r in records_train]
+#    tag_pred = record_model.evaluate_model(inputs, record_tag_encoder)
+#    tag_true = [[c.get_tag() for c in r.chars] for r in records_train]
+    correct_ratio_train = lg_utils.correct_ratio_calculation(records_train, 
+                                char_encoder, record_model, record_tag_encoder)
+    print("The correct ratio of train set is {}".format(correct_ratio_train))
+    
+    # Calculate the error rate on cv set
+    corrcect_ratio_cv = lg_utils.correct_ratio_calculation(records_cv, 
+                                char_encoder, record_model, record_tag_encoder)
+    
+    print("The correct ratio of cv set is {}".format(corrcect_ratio_cv))
     
     raise RuntimeError
         
