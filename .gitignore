@@ -2,7 +2,8 @@ LSTMdata/
 models/
 Embedding/
 __pycache__/
-Autoparse/
+result/
+data/
 logart_html/
 log/
 plot/

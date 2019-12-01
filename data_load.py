@@ -7,6 +7,7 @@ Created on Mon Nov  4 22:59:19 2019
 
 import os
 import pandas as pd
+import pickle
 import itertools
 from bs4 import BeautifulSoup as BS
 
@@ -18,7 +19,11 @@ class DataLoader(object):
     def __init__(self):
         self.datapath = None
         
-    def load_data(self, interested_tags, mode, n, cv_perc=0.5):
+    def load_data(self, interested_tags, mode, n,
+                  train_perc=0.5, cv_perc=0.2):
+        '''
+        return a tuple containing lists of pages or records, depending on mode
+        '''
         pages = []
         records = []
         for file in self.get_file(mode, n):
@@ -27,11 +32,14 @@ class DataLoader(object):
             records.extend(rs)
             
         if mode == "train":
-            pages_train, pages_cv = lg_utils.random_separate(pages, 1 - cv_perc)
-            records_train, records_cv = lg_utils.random_separate(records, 1 - cv_perc)
+            pages_train, pages_cv, pages_test = lg_utils.random_separate(pages, 
+                                                             [train_perc, cv_perc])
+            records_train, records_cv, records_test = lg_utils.random_separate(records,
+                                                             [train_perc, cv_perc])
             print("Loaded {} pages for training.".format(len(pages_train)))
             print("Loaded {} pages for cross validation.".format(len(pages_cv)))
-            return pages_train, pages_cv, records_train, records_cv
+            print("Loaded {} pages for testing.".format(len(pages_test)))
+            return pages_train, pages_cv, pages_test, records_train, records_cv, records_test
         else:
             print("Loaded {} pages for testing.".format(len(pages)))
             return pages, records
@@ -39,7 +47,7 @@ class DataLoader(object):
     def load_section(self, files, interested_tags, mode):
         raise NotImplementedError
         
-    def get_file(self, mode, n):
+    def get_file(self, mode, n=None):
         raise NotImplementedError
         
     def get_person_tag(self):
@@ -95,10 +103,12 @@ class XYDataLoader(DataLoader):
                 eos_idx.append(cutoff - 1)
                 record_txts.append(txt[last_cutoff:cutoff])   #record_txts: a list of str
                         
+                if interested_tags is None:
+                    interested_tags_used = record_dfs.columns
                 for record_txt, row in zip(record_txts, record_dfs):
                     # Build tag sequence
                     tags = [NULL_TAG for _ in record_txt]
-                    for colname in interested_tags:
+                    for colname in interested_tags_used:
                         lg_utils.modify_tag_seq(record_txt, tags, row[colname], colname)
                         r = Record(record_txt, tags)
                     records.append(r)
@@ -110,7 +120,9 @@ class XYDataLoader(DataLoader):
             pages.append(Page(pid, txt, eos_idx))
         return pages, records
             
-    def get_file(self, mode, n):
+    def get_file(self, mode, n=None):
+        if n is None:
+            return ValueError("Loader does not support unspecified size")
         if mode == "train":
             return [(os.path.join(self.datapath, "train", "text{}.txt".format(i)),
                         os.path.join(self.datapath, "train", "tag{}.xlsx".format(i))) \
@@ -126,9 +138,12 @@ class XYDataLoader(DataLoader):
 
 
 class HtmlDataLoader(DataLoader):
-    def __init__(self):
+    def __init__(self, size="small"):
+        '''
+        size: "small" or "full"
+        '''
         super().__init__()
-        self.datapath = os.path.join(os.getcwd(), "logart_html")
+        self.datapath = os.path.join(os.getcwd(), "logart_html", size)
         
     def load_section(self, files, interested_tags, mode):
         """
@@ -144,7 +159,7 @@ class HtmlDataLoader(DataLoader):
         records = []
         all_text, all_tags = self.format_raw_data(lines)
         rest_tags = all_tags # list of tag, together page
-        page_texts = all_text.split('【')   #list of str, except the first str, all other str starts with "】"
+        page_texts = all_text.split('【')   # list of str, except the first str, all other str starts with "】"
         rest_tags = rest_tags[len(page_texts[0]):]    
         for page_text in page_texts[1:]:
             
@@ -159,7 +174,6 @@ class HtmlDataLoader(DataLoader):
             
             for i, tag in enumerate(page_tags):
                 # EOS is the index just before a name' beginning
-#                if page_tags[0] == self.get_person_tag():
                 if i == 0 and tag == self.get_person_tag():
                     continue
                 if tag == self.get_person_tag() and page_tags[i-1] != self.get_person_tag():
@@ -176,55 +190,24 @@ class HtmlDataLoader(DataLoader):
                 # substitution
                 record_tag = []
                 for tag in tags:
-                    if tag in interested_tags:
-                        record_tag.append(tag)
+                    if (interested_tags is None) or (tag in interested_tags):
+                        record_tag.append(tag)          # None means take all
                     else:
                         record_tag.append(NULL_TAG)
                 records_in_page.append(Record(text, record_tag))
                 head_char_idx += sent_len
             records.extend(records_in_page)
             pages.append(page)
-#            eos_idx = []
-#            last_tag_is_person = False
-#            is_preface = True
-#            curr_idx = 0
-#            curr_txt = ""
-#            curr_tags = []
-#            for char, tag in zip(txt, page_tags):
-#                if tag == self.get_person_tag():
-#                    if not is_preface and not last_tag_is_person:      # End of a record
-#                        records.append(Record(curr_txt, curr_tags))
-#                        
-#                    is_preface = False
-#                    last_tag_is_person = True
-#                    if curr_idx > 0:
-#                        eos_idx.append(curr_idx)
-#                if is_preface:
-#                    continue
-#                # Inside a record
-#                curr_txt += char
-#                if tag not in interested_tags:  # ignore tags in training set if not interested
-#                    tag = NULL_TAG
-#                curr_tags.append(tag)
-#                curr_idx += 1
-#            eos_idx.append(len(txt) - 1)
-            
-            
-            
-#            records.append(Record(record_txt, record_tags))
-#            pages.append(Page(pid, txt, eos_idx))
-#            page = pages[-1]
-#            print(page.txt)
-#            print(page.eos_idx)
-            
-#            print([page.eos_idx[0]] + [x-y for x,y in zip(page.eos_idx[1:], page.eos_idx[:-1])])
         return pages, records
             
-    def get_file(self, mode, n):
+    def get_file(self, mode, n=None):
         if mode == "train":
             input_path = os.path.join(self.datapath, "train")
             tagged_filelist = [os.path.join(input_path, x) for x in os.listdir(input_path)]
-            return tagged_filelist[:n]
+            if n is None:
+                return tagged_filelist
+            else:
+                return tagged_filelist[:n]
         elif mode == "test":
             raise NotImplementedError
         else:
@@ -293,3 +276,46 @@ class HtmlDataLoader(DataLoader):
     
     def get_person_tag(self):
         return "person"
+
+
+def dump_data_to_pickle(d, filename, size):
+    path = os.path.join(os.getcwd(), "data", size)
+    pickle.dump(d, open(os.path.join(path, filename), "wb"))
+
+
+if __name__ == "__main__":    
+    N_SECTION_TRAIN = None
+    N_SECTION_TEST = 1
+    SOURCE_TYPE = "html"
+    SIZE = "full"
+    # Set up data loaders
+    if SOURCE_TYPE == "XY":
+        loader = XYDataLoader()
+    elif SOURCE_TYPE == "html":
+        loader = HtmlDataLoader(SIZE)
+    else:
+        raise ValueError
+    test_loader = XYDataLoader()
+    
+    # Model hyper-parameter definition
+    interested_tags = [loader.get_person_tag()]
+    if SOURCE_TYPE == "XY":
+        interested_tags.extend(["任職時間"])
+#    interested_tags = ["人名", "任職時間", "籍貫", "入仕方法"]
+    elif SOURCE_TYPE == "html":
+        interested_tags.extend(["post_time", "office", "jiguan"])
+    
+    # We want to load all tags if it's in full mode, by setting interested_tags
+    # to be None
+    if SIZE == "full":
+        interested_tags = None
+    
+    data = loader.load_data(interested_tags, "train", N_SECTION_TRAIN)
+    
+    dump_data_to_pickle(data[0], "pages_train.p", SIZE)
+    dump_data_to_pickle(data[1], "pages_cv.p", SIZE)
+    dump_data_to_pickle(data[2], "pages_test.p", SIZE)
+    dump_data_to_pickle(data[3], "records_train.p", SIZE)
+    dump_data_to_pickle(data[4], "records_cv.p", SIZE)
+    dump_data_to_pickle(data[5], "records_test.p", SIZE)
+    

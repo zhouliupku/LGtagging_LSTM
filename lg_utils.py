@@ -5,7 +5,9 @@ Created on Mon Oct 21 00:11:24 2019
 @author: Zhou
 """
 
+import os
 import re
+import pickle
 import numpy as np
 
 from config import NULL_TAG, PADDING_CHAR
@@ -17,16 +19,15 @@ def convert_to_orig(s):
     return s.replace(' ', PADDING_CHAR)
 
 
-def random_separate(xs, perc):
+def random_separate(xs, percs):
     """
-    given a list of objects xs, split it randomly into two parts with the first
-    one taking a percentage of perc
+    given a list of objects xs, split it randomly into n+1 parts where n=len(percs)
     """
-    n1 = int(perc * len(xs))
+    ns = list(map(int, [p * len(xs) for p in percs]))
     index_permuted = np.random.permutation(len(xs))
-    x1 = [xs[i] for i in index_permuted[:n1]]
-    x2 = [xs[i] for i in index_permuted[n1:]]
-    return x1, x2
+    bs = np.clip(np.array(ns).cumsum(), 0, len(xs))
+    bs = [0] + list(bs) + [len(xs)]
+    return [[xs[i] for i in index_permuted[beg:end]] for beg, end in zip(bs[:-1], bs[1:])]
 
 def modify_tag_seq(text, tag_seq, keyword, tagname):
     """
@@ -100,3 +101,8 @@ def correct_ratio_calculation(records, char_encoder, record_model, record_tag_en
     downstairs = [len(r) for r in tag_pred]
     correct_ratio = sum(upstairs) / float(sum(downstairs))
     return correct_ratio
+
+
+def load_data_from_pickle(filename, size):
+    path = os.path.join(os.getcwd(), "data", size)
+    return pickle.load(open(os.path.join(path, filename), "rb"))
