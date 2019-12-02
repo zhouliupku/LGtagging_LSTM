@@ -105,6 +105,8 @@ class XYDataLoader(DataLoader):
                         
                 if interested_tags is None:
                     interested_tags_used = record_dfs.columns
+                else:
+                    interested_tags_used = interested_tags
                 for record_txt, row in zip(record_txts, record_dfs):
                     # Build tag sequence
                     tags = [NULL_TAG for _ in record_txt]
