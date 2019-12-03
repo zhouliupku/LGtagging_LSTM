@@ -102,12 +102,12 @@ class Tagger(nn.Module):
                     continue
                 tag_scores = self.forward(test_sent)
                 tag_seq = self.transform(tag_scores)
-                res = y_encoder.decode(tag_seq.max(dim=1).indices)
+                res = y_encoder.decode(tag_seq)
                 result_list.append(res)
             return result_list
         
     def transform(self, tag_scores):
-        return tag_scores
+        return tag_scores.max(dim=1).indices
     
     
 class LSTMTagger(Tagger):
@@ -175,5 +175,6 @@ class LSTMCRFTagger(Tagger):
                                 targets.view(targets.shape[0], -1))
         
     def transform(self, tag_scores):
-        return self.crf.decode(tag_scores.view(tag_scores.shape[0],1,-1))
+        return torch.tensor(self.crf.decode(tag_scores.view(tag_scores.shape[0],1,-1))[0],
+                            dtype=torch.long)
         

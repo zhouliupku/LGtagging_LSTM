@@ -27,9 +27,13 @@ class DataLoader(object):
         pages = []
         records = []
         for file in self.get_file(mode, n):
-            ps, rs = self.load_section(file, interested_tags, mode)
-            pages.extend(ps)
-            records.extend(rs)
+            try:
+                ps, rs = self.load_section(file, interested_tags, mode)
+                pages.extend(ps)
+                records.extend(rs)
+            except ValueError:
+                print("VALUE ERROR!")
+                print(file)
             
         if mode == "train":
             pages_train, pages_cv, pages_test = lg_utils.random_separate(pages, 
@@ -289,7 +293,7 @@ if __name__ == "__main__":
     N_SECTION_TRAIN = None
     N_SECTION_TEST = 1
     SOURCE_TYPE = "html"
-    SIZE = "full"
+    SIZE = "medium"
     # Set up data loaders
     if SOURCE_TYPE == "XY":
         loader = XYDataLoader()

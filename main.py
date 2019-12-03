@@ -32,19 +32,19 @@ if __name__ == "__main__":
     PAGE_MODEL_PATH = os.path.join(MODEL_PATH, "page_model")
     RECORD_MODEL_PATH = os.path.join(MODEL_PATH, "record_model")
     EMBEDDING_PATH = os.path.join(os.getcwd(), "Embedding", "polyglot-zh_char.pkl")
-    DATASIZE = "tiny"
+    DATASIZE = "medium"
     SAVER_TYPE = "html"
     
-    N_EPOCH_PAGE = 20
+    N_EPOCH_PAGE = 50
     N_CHECKPOINT_PAGE = 1
     N_SAVE_PAGE = 5
-    LEARNING_RATE_PAGE = 0.01
+    LEARNING_RATE_PAGE = 0.05
     HIDDEN_DIM_PAGE = 6
-    N_EPOCH_RECORD = 20
+    N_EPOCH_RECORD = 50
     N_CHECKPOINT_RECORD = 1
     N_SAVE_RECORD = 5
     LEARNING_RATE_RECORD = 0.05
-    HIDDEN_DIM_RECORD = 8
+    HIDDEN_DIM_RECORD = 12
     
     NEED_TRAIN_MODEL = True
     USE_REGEX = False
