@@ -14,7 +14,7 @@ import datetime
 import logging
 import itertools
 
-from model import LSTMTagger, TwoLayerLSTMTagger
+from model import LSTMTagger, TwoLayerLSTMTagger, LSTMCRFTagger
 from config import NULL_TAG, INS_TAG, EOS_TAG
 from Encoders import XEncoder, YEncoder
 import lg_utils
@@ -38,12 +38,12 @@ if __name__ == "__main__":
     N_EPOCH_PAGE = 20
     N_CHECKPOINT_PAGE = 1
     N_SAVE_PAGE = 5
-    LEARNING_RATE_PAGE = 0.3
+    LEARNING_RATE_PAGE = 0.01
     HIDDEN_DIM_PAGE = 6
     N_EPOCH_RECORD = 20
     N_CHECKPOINT_RECORD = 1
     N_SAVE_RECORD = 5
-    LEARNING_RATE_RECORD = 0.5
+    LEARNING_RATE_RECORD = 0.05
     HIDDEN_DIM_RECORD = 8
     
     NEED_TRAIN_MODEL = True
@@ -77,12 +77,17 @@ if __name__ == "__main__":
     tagset = set(itertools.chain.from_iterable([r.orig_tags for r in records_train]))
     tagset = ["<BEG>", "<END>"] + sorted(list(tagset))
     record_tag_encoder = YEncoder(tagset)
-    page_model = LSTMTagger(logger, EMBEDDING_DIM, HIDDEN_DIM_RECORD, 
+    page_model = LSTMCRFTagger(logger, EMBEDDING_DIM, HIDDEN_DIM_RECORD, 
                               record_tag_encoder.get_tag_dim(), bidirectional=False)
+#    page_model = LSTMTagger(logger, EMBEDDING_DIM, HIDDEN_DIM_RECORD, 
+#                              record_tag_encoder.get_tag_dim(), bidirectional=False)
 #    page_model = TwoLayerLSTMTagger(logger, EMBEDDING_DIM, HIDDEN_DIM_PAGE,
 #                                    page_tag_encoder.get_tag_dim(), bidirectional=True)
-    record_model = LSTMTagger(logger, EMBEDDING_DIM, HIDDEN_DIM_RECORD, 
+    record_model = LSTMCRFTagger(logger, EMBEDDING_DIM, HIDDEN_DIM_RECORD, 
                               record_tag_encoder.get_tag_dim(), bidirectional=True)
+    
+    # TODO: implement CRF model and instantiate as record_model
+    
     page_optimizer = optim.SGD(page_model.parameters(), lr=LEARNING_RATE_PAGE)
     record_optimizer = optim.SGD(record_model.parameters(), lr=LEARNING_RATE_RECORD)
     

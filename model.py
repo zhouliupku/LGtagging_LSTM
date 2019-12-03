@@ -8,6 +8,7 @@ Created on Mon Oct 21 17:45:36 2019
 import os
 import torch
 from torch import nn
+from torchcrf import CRF
 import matplotlib.pyplot as plt
 import datetime
 import math
@@ -15,11 +16,11 @@ import math
 PLOT_PATH = os.path.join(os.getcwd(), "plot")
 
 
-class LSTMTagger(nn.Module):
+class Tagger(nn.Module):
 
     def __init__(self, logger, embedding_dim, hidden_dim, tag_dim,
                  bidirectional=False):
-        super(LSTMTagger, self).__init__()
+        super(Tagger, self).__init__()
         self.logger = logger
         self.embedding_dim = embedding_dim
         self.hidden_dim = hidden_dim
@@ -27,23 +28,12 @@ class LSTMTagger(nn.Module):
         self.bidirectional = bidirectional
         self.model_setup()
         
-    def model_setup(self):
-        self.lstm = nn.LSTM(self.embedding_dim, self.hidden_dim,
-                            bidirectional=self.bidirectional)
-        if self.bidirectional:
-            self.hidden2tag = nn.Linear(self.hidden_dim*2, self.tag_dim)
-        else:
-            self.hidden2tag = nn.Linear(self.hidden_dim, self.tag_dim)
-
-    def forward(self, sentence):
-        lstm_out, _ = self.lstm(sentence.view(sentence.shape[0], 1, -1))
-        tag_space = self.hidden2tag(lstm_out.view(sentence.shape[0], -1))
-        tag_scores = nn.functional.log_softmax(tag_space, dim=1)
-        return tag_scores
+    def calc_loss(self, tag_scores, targets, loss_func):
+        return loss_func(tag_scores, targets)
 
     def train_model(self, training_data, cv_data,
                     optimizer, loss_type, n_epoch, n_check, 
-                    n_save, save_path):
+                    n_save, save_path, need_plot=False):
         if loss_type == "NLL":
             loss_function = nn.NLLLoss()
         else:
@@ -51,7 +41,8 @@ class LSTMTagger(nn.Module):
             
         losses_train = []
         losses_cv = []
-        plt.figure(figsize=[20, 10])
+        if need_plot:
+            plt.figure(figsize=[20, 10])
         
         for epoch in range(n_epoch):
             # Use training data to train
@@ -59,7 +50,7 @@ class LSTMTagger(nn.Module):
             for sentence, targets in training_data:
                 self.zero_grad()   # clear accumulated gradient before each instance
                 tag_scores = self.forward(sentence)
-                loss = loss_function(tag_scores, targets)
+                loss = self.calc_loss(tag_scores, targets, loss_function)
                 sum_loss_train += loss.item()
                 loss.backward(retain_graph=True)
                 optimizer.step()
@@ -85,15 +76,16 @@ class LSTMTagger(nn.Module):
                            os.path.join(save_path, "epoch{}.pt".format(epoch)))
          
         # Plot the loss function
-        plt.plot(list(map(math.log10, losses_train))) 
-        plt.plot(list(map(math.log10, losses_cv)))
-        plt.xlabel("Epoch")
-        plt.ylabel("Loss")
-        plt.legend(["Train", "CV"])
-        curr_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-        filename = "plot"+curr_time+".png"
-        plt.savefig(os.path.join(PLOT_PATH, filename))
-        plt.close()
+        if need_plot:
+            plt.plot(list(map(math.log10, losses_train))) 
+            plt.plot(list(map(math.log10, losses_cv)))
+            plt.xlabel("Epoch")
+            plt.ylabel("Loss")
+            plt.legend(["Train", "CV"])
+            curr_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+            filename = "plot"+curr_time+".png"
+            plt.savefig(os.path.join(PLOT_PATH, filename))
+            plt.close()
         
         # Save final model
         torch.save(self.state_dict(), 
@@ -109,12 +101,33 @@ class LSTMTagger(nn.Module):
                 if len(test_sent) == 0:
                     continue
                 tag_scores = self.forward(test_sent)
-                res = y_encoder.decode(tag_scores.max(dim=1).indices)
+                tag_seq = self.transform(tag_scores)
+                res = y_encoder.decode(tag_seq.max(dim=1).indices)
                 result_list.append(res)
             return result_list
+        
+    def transform(self, tag_scores):
+        return tag_scores
+    
+    
+class LSTMTagger(Tagger):
+        
+    def model_setup(self):
+        self.lstm = nn.LSTM(self.embedding_dim, self.hidden_dim,
+                            bidirectional=self.bidirectional)
+        if self.bidirectional:
+            self.hidden2tag = nn.Linear(self.hidden_dim*2, self.tag_dim)
+        else:
+            self.hidden2tag = nn.Linear(self.hidden_dim, self.tag_dim)
+
+    def forward(self, sentence):
+        lstm_out, _ = self.lstm(sentence.view(sentence.shape[0], 1, -1))
+        tag_space = self.hidden2tag(lstm_out.view(sentence.shape[0], -1))
+        tag_scores = nn.functional.log_softmax(tag_space, dim=1)
+        return tag_scores
        
         
-class TwoLayerLSTMTagger(LSTMTagger):
+class TwoLayerLSTMTagger(Tagger):
         
     def model_setup(self):
         self.lstm1 = nn.LSTM(self.embedding_dim, self.hidden_dim,
@@ -136,4 +149,31 @@ class TwoLayerLSTMTagger(LSTMTagger):
         tag_space = self.hidden2tag(lstm_out2.view(sentence.shape[0], -1))
         tag_scores = nn.functional.log_softmax(tag_space, dim=1)
         return tag_scores
+       
+        
+class LSTMCRFTagger(Tagger):
+        
+    def model_setup(self):
+        self.lstm = nn.LSTM(self.embedding_dim, self.hidden_dim,
+                            bidirectional=self.bidirectional)
+        if self.bidirectional:
+            self.hidden2tag = nn.Linear(self.hidden_dim*2, self.tag_dim)
+        else:
+            self.hidden2tag = nn.Linear(self.hidden_dim, self.tag_dim)
+            
+        self.crf = CRF(self.tag_dim)
+
+    def forward(self, sentence):
+        lstm_out, _ = self.lstm(sentence.view(sentence.shape[0], 1, -1))
+        tag_space = self.hidden2tag(lstm_out.view(sentence.shape[0], -1))
+        tag_scores = nn.functional.log_softmax(tag_space, dim=1)
+        return tag_scores
     
+    def calc_loss(self, tag_scores, targets, loss_func):
+        tag_scores = nn.functional.log_softmax(tag_scores, dim=1)
+        return -self.crf.forward(tag_scores.view(tag_scores.shape[0], 1, -1),
+                                targets.view(targets.shape[0], -1))
+        
+    def transform(self, tag_scores):
+        return self.crf.decode(tag_scores.view(tag_scores.shape[0],1,-1))
+        
