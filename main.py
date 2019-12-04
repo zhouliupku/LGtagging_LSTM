@@ -13,6 +13,7 @@ from torch import optim
 import datetime
 import logging
 import itertools
+import argparse
 
 from model import LSTMTagger, TwoLayerLSTMTagger, LSTMCRFTagger
 from config import NULL_TAG, INS_TAG, EOS_TAG
@@ -20,11 +21,21 @@ from Encoders import XEncoder, YEncoder
 import lg_utils
 from data_save import ExcelSaver, HtmlSaver
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--data_size', type=str, default='tiny',
+                    choices=['tiny', 'small', 'medium', 'full'],
+                    help='Size of training data')
+parser.add_argument('--saver_type', type=str, default='html', 
+                    choices=['html', 'excel'],
+                    help='Type of saver')
 
-    
+args = parser.parse_args()
+
 
 if __name__ == "__main__":
-    #TODO: argparse
+    print("\nParameters:")
+    for attr, value in args.__dict__.items():
+        print("\t{} = {}".format(attr.upper(), value))
     # TODO: put into config
     # I/O settings
     OUTPUT_PATH = os.path.join(os.getcwd(), "result")
@@ -32,8 +43,6 @@ if __name__ == "__main__":
     PAGE_MODEL_PATH = os.path.join(MODEL_PATH, "page_model")
     RECORD_MODEL_PATH = os.path.join(MODEL_PATH, "record_model")
     EMBEDDING_PATH = os.path.join(os.getcwd(), "Embedding", "polyglot-zh_char.pkl")
-    DATASIZE = "medium"
-    SAVER_TYPE = "html"
     
     N_EPOCH_PAGE = 50
     N_CHECKPOINT_PAGE = 1
@@ -51,6 +60,8 @@ if __name__ == "__main__":
     np.random.seed(0)
     torch.manual_seed(0)
     
+    raise RuntimeError
+    
     # Logging
     curr_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     logging.basicConfig(filename=os.path.join("log",
@@ -62,12 +73,12 @@ if __name__ == "__main__":
     logger.info("Started training at {}".format(curr_time))
     
     # Load in data
-    pages_train = lg_utils.load_data_from_pickle("pages_train.p", DATASIZE)
-    pages_cv = lg_utils.load_data_from_pickle("pages_cv.p", DATASIZE)
-    pages_test = lg_utils.load_data_from_pickle("pages_test.p", DATASIZE)
-    records_train = lg_utils.load_data_from_pickle("records_train.p", DATASIZE)
-    records_cv = lg_utils.load_data_from_pickle("records_cv.p", DATASIZE)
-    records_test = lg_utils.load_data_from_pickle("records_test.p", DATASIZE)
+    pages_train = lg_utils.load_data_from_pickle("pages_train.p", args.data_size)
+    pages_cv = lg_utils.load_data_from_pickle("pages_cv.p", args.data_size)
+    pages_test = lg_utils.load_data_from_pickle("pages_test.p", args.data_size)
+    records_train = lg_utils.load_data_from_pickle("records_train.p", args.data_size)
+    records_cv = lg_utils.load_data_from_pickle("records_cv.p", args.data_size)
+    records_test = lg_utils.load_data_from_pickle("records_test.p", args.data_size)
     
     # Model hyper-parameter definition
     EMBEDDING_DIM = 64          # depending on pre-trained word embedding model
@@ -170,7 +181,7 @@ if __name__ == "__main__":
         
     # Saving
 #    curr_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-#    if SAVER_TYPE == "html":
+#    if args.saver_type == "html":
 #        saver = HtmlSaver(records)
 #        filename = os.path.join(OUTPUT_PATH, "test_{}.txt".format(curr_time))
 #    else:
