@@ -37,6 +37,9 @@ parser.add_argument('--data_size', type=str, default='tiny',
 parser.add_argument('--saver_type', type=str, default='html', 
                     choices=['html', 'excel'],
                     help='Type of saver')
+parser.add_argument('--task_type', type=str, default='page', 
+                    choices=['page', 'record'],
+                    help='Type of task')
 parser.add_argument('--loss_type', type=str, default='NLL', 
                     choices=['NLL'],
                     help='Type of loss function')
@@ -58,9 +61,8 @@ if __name__ == "__main__":
     # TODO: put into config
     # I/O settings
     OUTPUT_PATH = os.path.join(os.getcwd(), "result")
-    MODEL_PATH = os.path.join(os.getcwd(), "models")
-    PAGE_MODEL_PATH = os.path.join(MODEL_PATH, "page_model")
-    RECORD_MODEL_PATH = os.path.join(MODEL_PATH, "record_model")
+    REGEX_PATH = os.path.join(os.getcwd(), "models")
+    MODEL_PATH = os.path.join(os.getcwd(), "models", "{}_model".format(args.task_type))
     EMBEDDING_PATH = os.path.join(os.getcwd(), "Embedding", "polyglot-zh_char.pkl")
     NEED_TRAIN_MODEL = True
     USE_REGEX = False
@@ -69,8 +71,7 @@ if __name__ == "__main__":
     
     # Logging
     curr_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    logging.basicConfig(filename=os.path.join("log",
-                                              "run{}.log".format(curr_time)),
+    logging.basicConfig(filename=os.path.join("log", "run{}.log".format(curr_time)),
                         format='%(asctime)s %(message)s', 
                         filemode='w') 
     logger = logging.getLogger()
@@ -78,78 +79,50 @@ if __name__ == "__main__":
     logger.info("Started training at {}".format(curr_time))
     
     # Load in data
-    pages_train = lg_utils.load_data_from_pickle("pages_train.p", args.data_size)
-    pages_cv = lg_utils.load_data_from_pickle("pages_cv.p", args.data_size)
-    pages_test = lg_utils.load_data_from_pickle("pages_test.p", args.data_size)
-    records_train = lg_utils.load_data_from_pickle("records_train.p", args.data_size)
-    records_cv = lg_utils.load_data_from_pickle("records_cv.p", args.data_size)
-    records_test = lg_utils.load_data_from_pickle("records_test.p", args.data_size)
+    raw_train = lg_utils.load_data_from_pickle("{}s_train.p".format(args.task_type),
+                                               args.data_size)
+    raw_cv = lg_utils.load_data_from_pickle("{}s_cv.p".format(args.task_type),
+                                               args.data_size)
+    raw_test = lg_utils.load_data_from_pickle("{}s_test.p".format(args.task_type),
+                                               args.data_size)
     
     char_encoder = XEncoder(EMBEDDING_PATH)
     vars(args)['embedding_dim'] = char_encoder.embedding_dim
-    page_tag_encoder = YEncoder([INS_TAG, EOS_TAG])
-    tagset = set(itertools.chain.from_iterable([r.orig_tags for r in records_train]))
-    tagset = ["<BEG>", "<END>"] + sorted(list(tagset))
-    record_tag_encoder = YEncoder(tagset)
+    if args.task_type == "page":
+        tag_encoder = YEncoder([INS_TAG, EOS_TAG])
+    else:
+        tagset = set(itertools.chain.from_iterable([r.orig_tags for r in raw_train]))
+        tagset = ["<BEG>", "<END>"] + sorted(list(tagset))
+        tag_encoder = YEncoder(tagset)
 #    vars(args)['tag_dim'] = char_encoder.embedding_dim
-    page_model = LSTMCRFTagger(logger, args, 
-                              record_tag_encoder.get_tag_dim()) # TODO: add into args
-#    page_model = LSTMTagger(logger, EMBEDDING_DIM, HIDDEN_DIM_RECORD, 
-#                              record_tag_encoder.get_tag_dim(), bidirectional=False)
-#    page_model = TwoLayerLSTMTagger(logger, EMBEDDING_DIM, HIDDEN_DIM_PAGE,
-#                                    page_tag_encoder.get_tag_dim(), bidirectional=True)
-    record_model = LSTMCRFTagger(logger, args, 
-                              record_tag_encoder.get_tag_dim())
-    
-    # TODO: implement CRF model and instantiate as record_model
-    
-    page_optimizer = optim.SGD(page_model.parameters(), lr=args.learning_rate)
-    record_optimizer = optim.SGD(record_model.parameters(), lr=args.learning_rate)
+    model = LSTMCRFTagger(logger, args, tag_encoder.get_tag_dim())
+    optimizer = optim.SGD(model.parameters(), lr=args.learning_rate)
     
     # Load models if it was previously saved and want to continue
-    if os.path.exists(PAGE_MODEL_PATH) and not NEED_TRAIN_MODEL:
-        page_model.load_state_dict(torch.load(os.path.join(PAGE_MODEL_PATH, "final.pt")))
-        page_model.eval()
-    if os.path.exists(RECORD_MODEL_PATH) and not NEED_TRAIN_MODEL:
-        record_model.load_state_dict(torch.load(os.path.join(RECORD_MODEL_PATH, "final.pt")))
-        record_model.eval()
+    if os.path.exists(MODEL_PATH) and not NEED_TRAIN_MODEL:
+        model.load_state_dict(torch.load(os.path.join(MODEL_PATH, "final.pt")))
+        model.eval()
     
     # Training
     # Step 1. Data preparation
-    page_training_data = lg_utils.get_data_from_samples(pages_train,
-                                                        char_encoder,
-                                                        page_tag_encoder)
-    page_cv_data = lg_utils.get_data_from_samples(pages_cv,
-                                                  char_encoder,
-                                                  page_tag_encoder)
-    page_test_data = lg_utils.get_data_from_samples(pages_test,
-                                                  char_encoder,
-                                                  page_tag_encoder)
-    
-    record_training_data = lg_utils.get_data_from_samples(records_train,
-                                                          char_encoder,
-                                                          record_tag_encoder)
-    record_cv_data = lg_utils.get_data_from_samples(records_cv,
-                                                    char_encoder,
-                                                    record_tag_encoder)
-    record_test_data = lg_utils.get_data_from_samples(records_test,
-                                                    char_encoder,
-                                                    record_tag_encoder)
+    training_data = lg_utils.get_data_from_samples(raw_train, char_encoder, tag_encoder)
+    cv_data = lg_utils.get_data_from_samples(raw_cv, char_encoder, tag_encoder)
+    test_data = lg_utils.get_data_from_samples(raw_test, char_encoder, tag_encoder)
     
     # Step 2. Model training
-    if NEED_TRAIN_MODEL:
-        # 2.a Train model to parse pages into sentences
-        if not USE_REGEX:
-            page_model.train_model(page_training_data, page_cv_data, 
-                                   page_optimizer, args, PAGE_MODEL_PATH)
-        # 2.b Train model to tag sentences
-        record_model.train_model(record_training_data, record_cv_data, 
-                                 record_optimizer, args, RECORD_MODEL_PATH)
+    if NEED_TRAIN_MODEL:    # TODO: resume USE_REGEX
+        model.train_model(training_data, cv_data,  optimizer, args, MODEL_PATH)
         
+    # Step 3. Evaluation with correct ratio
+    lg_utils.correct_ratio_calculation(raw_train, model, "train", char_encoder, tag_encoder)
+    lg_utils.correct_ratio_calculation(raw_cv, model, "cv",char_encoder, tag_encoder)
+    lg_utils.correct_ratio_calculation(raw_test, model, "test",char_encoder, tag_encoder)
+    raise RuntimeError
+    
     # Evaluate on test set
     # Step 1. using page_to_sent_model, parse pages to sentences
     if USE_REGEX:
-        with open(os.path.join(MODEL_PATH, "surname.txt"), 'r', encoding="utf8") as f:
+        with open(os.path.join(REGEX_PATH, "surname.txt"), 'r', encoding="utf8") as f:
             surnames = f.readline().replace("\ufeff", '')
         tag_seq_list = []
         for p in pages_test:
@@ -172,12 +145,6 @@ if __name__ == "__main__":
 #    for record, tag_list in zip(records, tagged_sent):
 #        record.set_tag(tag_list)
     
-    lg_utils.correct_ratio_calculation(records_train, record_model, "train",
-                                       char_encoder, record_tag_encoder)
-    lg_utils.correct_ratio_calculation(records_cv, record_model, "cv",
-                                       char_encoder, record_tag_encoder)
-    lg_utils.correct_ratio_calculation(records_test, record_model, "test",
-                                       char_encoder, record_tag_encoder)
         
     # Saving
 #    curr_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
