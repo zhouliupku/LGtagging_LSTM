@@ -27,10 +27,11 @@ class Encoder(object):
     
     
 class XEncoder(Encoder):
-    def __init__(self, embedding_dim, embedding_filename):
+    def __init__(self, embedding_filename):
         with open(embedding_filename,'rb') as infile:
             vocab, vectors = pickle.load(infile, encoding='latin1')
-        self.word_embeddings = nn.Embedding(len(vocab), embedding_dim)
+        self.embedding_dim = vectors.shape[1]
+        self.word_embeddings = nn.Embedding(len(vocab), vectors.shape[1])
         self.word_id = {v:idx for idx, v in enumerate(vocab)}
         self.word_embeddings.weight.data.copy_(torch.from_numpy(vectors))
     

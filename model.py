@@ -18,33 +18,31 @@ PLOT_PATH = os.path.join(os.getcwd(), "plot")
 
 class Tagger(nn.Module):
 
-    def __init__(self, logger, embedding_dim, hidden_dim, tag_dim,
-                 bidirectional=False):
+    def __init__(self, logger, args, tag_dim):
         super(Tagger, self).__init__()
         self.logger = logger
-        self.embedding_dim = embedding_dim
-        self.hidden_dim = hidden_dim
+        self.embedding_dim = args.embedding_dim
+        self.hidden_dim = args.hidden_dim
         self.tag_dim = tag_dim
-        self.bidirectional = bidirectional
+        self.bidirectional = args.bidirectional
         self.model_setup()
         
     def calc_loss(self, tag_scores, targets, loss_func):
         return loss_func(tag_scores, targets)
 
     def train_model(self, training_data, cv_data,
-                    optimizer, loss_type, n_epoch, n_check, 
-                    n_save, save_path, need_plot=False):
-        if loss_type == "NLL":
+                    optimizer, args, save_path, need_plot=False):
+        if args.loss_type == "NLL":
             loss_function = nn.NLLLoss()
         else:
-            raise ValueError("Unsupported loss type: {}".format(loss_type))
+            raise ValueError("Unsupported loss type")
             
         losses_train = []
         losses_cv = []
         if need_plot:
             plt.figure(figsize=[20, 10])
         
-        for epoch in range(n_epoch):
+        for epoch in range(args.n_epoch):
             # Use training data to train
             sum_loss_train = 0
             for sentence, targets in training_data:
@@ -55,9 +53,8 @@ class Tagger(nn.Module):
                 loss.backward(retain_graph=True)
                 optimizer.step()
             losses_train.append(sum_loss_train / len(training_data))
-            if epoch % n_check == 0:
-                self.logger.info("Epoch {}".format(epoch))
-                self.logger.info("Training Loss = {}".format(loss.item()))
+            self.logger.info("Epoch {}".format(epoch))
+            self.logger.info("Training Loss = {}".format(loss.item()))
                 
             # Use CV data to validate
             with torch.no_grad():
@@ -67,13 +64,11 @@ class Tagger(nn.Module):
                     loss = loss_function(tag_scores, targets)
                     sum_loss_cv += loss.item()
                 losses_cv.append(sum_loss_cv / len(cv_data))
-            if epoch % n_check == 0:
-                self.logger.info("CV Loss = {}".format(loss.item()))
+            self.logger.info("CV Loss = {}".format(loss.item()))
                 
             # Save model snapshot
-            if epoch % n_save == 0:
-                torch.save(self.state_dict(), 
-                           os.path.join(save_path, "epoch{}.pt".format(epoch)))
+            torch.save(self.state_dict(), 
+                       os.path.join(save_path, "epoch{}.pt".format(epoch)))
          
         # Plot the loss function
         if need_plot:

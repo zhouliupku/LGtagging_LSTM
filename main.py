@@ -21,6 +21,15 @@ from Encoders import XEncoder, YEncoder
 import lg_utils
 from data_save import ExcelSaver, HtmlSaver
 
+
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_size', type=str, default='tiny',
                     choices=['tiny', 'small', 'medium', 'full'],
@@ -28,7 +37,17 @@ parser.add_argument('--data_size', type=str, default='tiny',
 parser.add_argument('--saver_type', type=str, default='html', 
                     choices=['html', 'excel'],
                     help='Type of saver')
-
+parser.add_argument('--loss_type', type=str, default='NLL', 
+                    choices=['NLL'],
+                    help='Type of loss function')
+parser.add_argument('--n_epoch', type=int, default=50, 
+                    help='Number of epoch')
+parser.add_argument('--learning_rate', type=float, default=0.05, 
+                    help='Learning rate')
+parser.add_argument('--hidden_dim', type=int, default=6,
+                    help='Hidden dim')
+parser.add_argument('--bidirectional', type=str2bool, default=False, 
+                    help='Boolean indicating whether bidirectional is enabled')
 args = parser.parse_args()
 
 
@@ -43,24 +62,10 @@ if __name__ == "__main__":
     PAGE_MODEL_PATH = os.path.join(MODEL_PATH, "page_model")
     RECORD_MODEL_PATH = os.path.join(MODEL_PATH, "record_model")
     EMBEDDING_PATH = os.path.join(os.getcwd(), "Embedding", "polyglot-zh_char.pkl")
-    
-    N_EPOCH_PAGE = 50
-    N_CHECKPOINT_PAGE = 1
-    N_SAVE_PAGE = 5
-    LEARNING_RATE_PAGE = 0.05
-    HIDDEN_DIM_PAGE = 6
-    N_EPOCH_RECORD = 50
-    N_CHECKPOINT_RECORD = 1
-    N_SAVE_RECORD = 5
-    LEARNING_RATE_RECORD = 0.05
-    HIDDEN_DIM_RECORD = 12
-    
     NEED_TRAIN_MODEL = True
     USE_REGEX = False
     np.random.seed(0)
     torch.manual_seed(0)
-    
-    raise RuntimeError
     
     # Logging
     curr_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -80,27 +85,26 @@ if __name__ == "__main__":
     records_cv = lg_utils.load_data_from_pickle("records_cv.p", args.data_size)
     records_test = lg_utils.load_data_from_pickle("records_test.p", args.data_size)
     
-    # Model hyper-parameter definition
-    EMBEDDING_DIM = 64          # depending on pre-trained word embedding model
-    char_encoder = XEncoder(EMBEDDING_DIM, EMBEDDING_PATH)
-        
+    char_encoder = XEncoder(EMBEDDING_PATH)
+    vars(args)['embedding_dim'] = char_encoder.embedding_dim
     page_tag_encoder = YEncoder([INS_TAG, EOS_TAG])
     tagset = set(itertools.chain.from_iterable([r.orig_tags for r in records_train]))
     tagset = ["<BEG>", "<END>"] + sorted(list(tagset))
     record_tag_encoder = YEncoder(tagset)
-    page_model = LSTMCRFTagger(logger, EMBEDDING_DIM, HIDDEN_DIM_RECORD, 
-                              record_tag_encoder.get_tag_dim(), bidirectional=False)
+#    vars(args)['tag_dim'] = char_encoder.embedding_dim
+    page_model = LSTMCRFTagger(logger, args, 
+                              record_tag_encoder.get_tag_dim()) # TODO: add into args
 #    page_model = LSTMTagger(logger, EMBEDDING_DIM, HIDDEN_DIM_RECORD, 
 #                              record_tag_encoder.get_tag_dim(), bidirectional=False)
 #    page_model = TwoLayerLSTMTagger(logger, EMBEDDING_DIM, HIDDEN_DIM_PAGE,
 #                                    page_tag_encoder.get_tag_dim(), bidirectional=True)
-    record_model = LSTMCRFTagger(logger, EMBEDDING_DIM, HIDDEN_DIM_RECORD, 
-                              record_tag_encoder.get_tag_dim(), bidirectional=True)
+    record_model = LSTMCRFTagger(logger, args, 
+                              record_tag_encoder.get_tag_dim())
     
     # TODO: implement CRF model and instantiate as record_model
     
-    page_optimizer = optim.SGD(page_model.parameters(), lr=LEARNING_RATE_PAGE)
-    record_optimizer = optim.SGD(record_model.parameters(), lr=LEARNING_RATE_RECORD)
+    page_optimizer = optim.SGD(page_model.parameters(), lr=args.learning_rate)
+    record_optimizer = optim.SGD(record_model.parameters(), lr=args.learning_rate)
     
     # Load models if it was previously saved and want to continue
     if os.path.exists(PAGE_MODEL_PATH) and not NEED_TRAIN_MODEL:
@@ -137,14 +141,10 @@ if __name__ == "__main__":
         # 2.a Train model to parse pages into sentences
         if not USE_REGEX:
             page_model.train_model(page_training_data, page_cv_data, 
-                                   page_optimizer, "NLL",
-                                   N_EPOCH_PAGE, N_CHECKPOINT_PAGE,
-                                   N_SAVE_PAGE, PAGE_MODEL_PATH)
+                                   page_optimizer, args, PAGE_MODEL_PATH)
         # 2.b Train model to tag sentences
         record_model.train_model(record_training_data, record_cv_data, 
-                                 record_optimizer, "NLL",
-                                 N_EPOCH_RECORD, N_CHECKPOINT_RECORD,
-                                 N_SAVE_RECORD, RECORD_MODEL_PATH)
+                                 record_optimizer, args, RECORD_MODEL_PATH)
         
     # Evaluate on test set
     # Step 1. using page_to_sent_model, parse pages to sentences
