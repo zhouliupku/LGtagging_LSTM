@@ -11,3 +11,7 @@ PADDING_CHAR = '○'
 INS_TAG = 'N'
 EOS_TAG = 'S'
 
+
+OUTPUT_PATH = os.path.join(os.getcwd(), "result")
+REGEX_PATH = os.path.join(os.getcwd(), "models")
+EMBEDDING_PATH = os.path.join(os.getcwd(), "Embedding", "polyglot-zh_char.pkl")

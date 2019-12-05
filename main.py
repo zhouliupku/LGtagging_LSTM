@@ -19,6 +19,7 @@ from model import LSTMTagger, TwoLayerLSTMTagger, LSTMCRFTagger
 from config import NULL_TAG, INS_TAG, EOS_TAG
 from Encoders import XEncoder, YEncoder
 import lg_utils
+import config
 from data_save import ExcelSaver, HtmlSaver
 
 
@@ -51,6 +52,8 @@ parser.add_argument('--hidden_dim', type=int, default=6,
                     help='Hidden dim')
 parser.add_argument('--bidirectional', type=str2bool, default=False, 
                     help='Boolean indicating whether bidirectional is enabled')
+parser.add_argument('--need_train', type=str2bool, default=True, 
+                    help='Boolean indicating whether need training model')
 args = parser.parse_args()
 
 
@@ -58,13 +61,8 @@ if __name__ == "__main__":
     print("\nParameters:")
     for attr, value in args.__dict__.items():
         print("\t{} = {}".format(attr.upper(), value))
-    # TODO: put into config
-    # I/O settings
-    OUTPUT_PATH = os.path.join(os.getcwd(), "result")
-    REGEX_PATH = os.path.join(os.getcwd(), "models")
-    MODEL_PATH = os.path.join(os.getcwd(), "models", "{}_model".format(args.task_type))
-    EMBEDDING_PATH = os.path.join(os.getcwd(), "Embedding", "polyglot-zh_char.pkl")
-    NEED_TRAIN_MODEL = True
+        
+    model_path = os.path.join(config.REGEX_PATH, "{}_model".format(args.task_type))
     USE_REGEX = False
     np.random.seed(0)
     torch.manual_seed(0)
@@ -78,6 +76,9 @@ if __name__ == "__main__":
     logger.setLevel(logging.DEBUG)
     logger.info("Started training at {}".format(curr_time))
     
+    # TODO: train
+    # TODO: test
+    
     # Load in data
     raw_train = lg_utils.load_data_from_pickle("{}s_train.p".format(args.task_type),
                                                args.data_size)
@@ -86,7 +87,7 @@ if __name__ == "__main__":
     raw_test = lg_utils.load_data_from_pickle("{}s_test.p".format(args.task_type),
                                                args.data_size)
     
-    char_encoder = XEncoder(EMBEDDING_PATH)
+    char_encoder = XEncoder(config.EMBEDDING_PATH)
     vars(args)['embedding_dim'] = char_encoder.embedding_dim
     if args.task_type == "page":
         tag_encoder = YEncoder([INS_TAG, EOS_TAG])
@@ -99,8 +100,8 @@ if __name__ == "__main__":
     optimizer = optim.SGD(model.parameters(), lr=args.learning_rate)
     
     # Load models if it was previously saved and want to continue
-    if os.path.exists(MODEL_PATH) and not NEED_TRAIN_MODEL:
-        model.load_state_dict(torch.load(os.path.join(MODEL_PATH, "final.pt")))
+    if os.path.exists(model_path) and not args.need_train:
+        model.load_state_dict(torch.load(os.path.join(model_path, "final.pt")))
         model.eval()
     
     # Training
@@ -109,9 +110,11 @@ if __name__ == "__main__":
     cv_data = lg_utils.get_data_from_samples(raw_cv, char_encoder, tag_encoder)
     test_data = lg_utils.get_data_from_samples(raw_test, char_encoder, tag_encoder)
     
+    # TODO: train
+    
     # Step 2. Model training
-    if NEED_TRAIN_MODEL:    # TODO: resume USE_REGEX
-        model.train_model(training_data, cv_data,  optimizer, args, MODEL_PATH)
+    if args.need_train:
+        model.train_model(training_data, cv_data,  optimizer, args, model_path)
         
     # Step 3. Evaluation with correct ratio
     lg_utils.correct_ratio_calculation(raw_train, model, "train", char_encoder, tag_encoder)
@@ -119,10 +122,10 @@ if __name__ == "__main__":
     lg_utils.correct_ratio_calculation(raw_test, model, "test",char_encoder, tag_encoder)
     raise RuntimeError
     
-    # Evaluate on test set
+    # TODO: produce
     # Step 1. using page_to_sent_model, parse pages to sentences
     if USE_REGEX:
-        with open(os.path.join(REGEX_PATH, "surname.txt"), 'r', encoding="utf8") as f:
+        with open(os.path.join(config.REGEX_PATH, "surname.txt"), 'r', encoding="utf8") as f:
             surnames = f.readline().replace("\ufeff", '')
         tag_seq_list = []
         for p in pages_test:
@@ -131,27 +134,27 @@ if __name__ == "__main__":
                 tags[m.start(0)] = EOS_TAG  # no need to -1, instead drop '○' before name
             tags[-1] = EOS_TAG
             tag_seq_list.append(tags)
-#    else:
-#        tag_seq_list = page_model.evaluate_model(page_test_data, page_tag_encoder)
-#    record_test_data = []
-#    records = []
-#    for p, pl in zip(pages_test, lg_utils.get_sent_len_for_pages(tag_seq_list, EOS_TAG)):
-#        rs = p.separate_sentence(pl)
-#        records.extend(rs)
-#        record_test_data.extend([r.get_x(char_encoder) for r in rs])
+    else:
+        tag_seq_list = page_model.evaluate_model(page_test_data, page_tag_encoder)
+    record_test_data = []
+    records = []
+    for p, pl in zip(pages_test, lg_utils.get_sent_len_for_pages(tag_seq_list, EOS_TAG)):
+        rs = p.separate_sentence(pl)
+        records.extend(rs)
+        record_test_data.extend([r.get_x(char_encoder) for r in rs])
             
-    # Step 2. using sent_to_tag_model, tag each sentence
-#    tagged_sent = record_model.evaluate_model(record_test_data, record_tag_encoder)
-#    for record, tag_list in zip(records, tagged_sent):
-#        record.set_tag(tag_list)
+#     Step 2. using sent_to_tag_model, tag each sentence
+    tagged_sent = record_model.evaluate_model(record_test_data, record_tag_encoder)
+    for record, tag_list in zip(records, tagged_sent):
+        record.set_tag(tag_list)
     
         
-    # Saving
-#    curr_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-#    if args.saver_type == "html":
-#        saver = HtmlSaver(records)
-#        filename = os.path.join(OUTPUT_PATH, "test_{}.txt".format(curr_time))
-#    else:
-#        saver = ExcelSaver(records)
-#        filename = os.path.join(OUTPUT_PATH, "test_{}.xlsx".format(curr_time))
-#    saver.save(filename, interested_tags)
+#     Saving
+    curr_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    if args.saver_type == "html":
+        saver = HtmlSaver(records)
+        filename = os.path.join(config.OUTPUT_PATH, "test_{}.txt".format(curr_time))
+    else:
+        saver = ExcelSaver(records)
+        filename = os.path.join(config.OUTPUT_PATH, "test_{}.xlsx".format(curr_time))
+    saver.save(filename, interested_tags)
