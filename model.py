@@ -6,6 +6,7 @@ Created on Mon Oct 21 17:45:36 2019
 """
 
 import os
+import pickle
 import torch
 from torch import nn
 from torchcrf import CRF
@@ -29,6 +30,11 @@ class Tagger(nn.Module):
         
     def calc_loss(self, tag_scores, targets, loss_func):
         return loss_func(tag_scores, targets)
+    
+    def save_model(self, save_path, epoch):
+        torch.save(self.state_dict(), os.path.join(save_path, "epoch{}.pt".format(epoch)))
+        pickle.dump(self.x_encoder, open(os.path.join(save_path, "x_encoder.p"), "wb"))
+        pickle.dump(self.y_encoder, open(os.path.join(save_path, "y_encoder.p"), "wb"))
 
     def train_model(self, training_data, cv_data,
                     optimizer, args, save_path, need_plot=False):
@@ -55,7 +61,7 @@ class Tagger(nn.Module):
             losses_train.append(sum_loss_train / len(training_data))
             self.logger.info("Epoch {}".format(epoch))
             self.logger.info("Training Loss = {}".format(loss.item()))
-                
+
             # Use CV data to validate
             with torch.no_grad():
                 sum_loss_cv = 0
@@ -67,8 +73,7 @@ class Tagger(nn.Module):
             self.logger.info("CV Loss = {}".format(loss.item()))
                 
             # Save model snapshot
-            torch.save(self.state_dict(), 
-                       os.path.join(save_path, "epoch{}.pt".format(epoch)))
+            self.save_model(save_path, epoch)
          
         # Plot the loss function
         if need_plot:
@@ -83,8 +88,7 @@ class Tagger(nn.Module):
             plt.close()
         
         # Save final model
-        torch.save(self.state_dict(), 
-                   os.path.join(save_path, "final.pt"))
+        self.save_model(save_path, "_final")
 
     def evaluate_model(self, test_data, y_encoder):
         """
