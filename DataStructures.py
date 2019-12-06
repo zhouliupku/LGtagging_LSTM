@@ -10,11 +10,11 @@ from config import INS_TAG, EOS_TAG
 
 class Page(object):
     def __init__(self, pid, txt, eos_idx):
-        self.pid = pid
-        self.txt = txt
-        self.eos_idx = eos_idx
+        self.pid = pid   #page id
+        self.txt = txt   #original text
+        self.eos_idx = eos_idx     #end-of-sentence indices
         
-    def separate_sentence(self, parsed_sent_len):
+    def separate_sentence(self, parsed_sent_len):    
         """
         Separate page to sentences according to parsed_sent_len, list of int
         Return a list of Record
@@ -44,6 +44,9 @@ class Page(object):
         return encoder.encode(tags)
     
     def get_sep_len(self):
+        """
+        get the list of each sentence's length by end-of-sentence indices
+        """
         if self.eos_idx == []:
             return []
         else:
@@ -65,6 +68,8 @@ class Record(object):
         self.chars = self.chars + [CharSample("</S>", "<END>")]
 #    
     def set_tag(self, tag_seq):
+        """
+        """
         assert len(tag_seq) == len(self.chars)
         for i in range(1, len(tag_seq) - 1):
             self.chars[i].set_tag(tag_seq[i])

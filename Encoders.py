@@ -25,6 +25,12 @@ class Encoder(object):
         """
         raise NotImplementedError
     
+    def get_dim(self):
+        """
+        Return the encoding dimension of encoder
+        """
+        raise NotImplementedError
+    
     
 class XEncoder(Encoder):
     def __init__(self, embedding_filename):
@@ -40,6 +46,9 @@ class XEncoder(Encoder):
                 else self.word_id["<UNK>"] for w in series]
         sentence = torch.tensor(idxs, dtype=torch.long)
         return self.word_embeddings(sentence)
+    
+    def get_dim(self):
+        return self.embedding_dim
         
 
 class YEncoder(Encoder):
@@ -58,4 +67,7 @@ class YEncoder(Encoder):
     
     def decode(self, res_tensor):
         return [self.tag_index_dict[t.item()] for t in res_tensor]
+    
+    def get_dim(self):
+        return self.get_tag_dim()       # TODO: unify
     

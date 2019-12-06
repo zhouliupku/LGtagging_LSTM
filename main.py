@@ -9,17 +9,13 @@ import os
 import re
 import torch
 import numpy as np
-from torch import optim
 import datetime
 import logging
-import itertools
 import argparse
 
-from model import LSTMTagger, TwoLayerLSTMTagger, LSTMCRFTagger
-from config import NULL_TAG, INS_TAG, EOS_TAG
-from Encoders import XEncoder, YEncoder
 import lg_utils
 import config
+import process
 from data_save import ExcelSaver, HtmlSaver
 
 
@@ -62,7 +58,6 @@ if __name__ == "__main__":
     for attr, value in args.__dict__.items():
         print("\t{} = {}".format(attr.upper(), value))
         
-    model_path = os.path.join(config.REGEX_PATH, "{}_model".format(args.task_type))
     USE_REGEX = False
     np.random.seed(0)
     torch.manual_seed(0)
@@ -76,50 +71,8 @@ if __name__ == "__main__":
     logger.setLevel(logging.DEBUG)
     logger.info("Started training at {}".format(curr_time))
     
-    # TODO: train
-    # TODO: test
-    
-    # Load in data
-    raw_train = lg_utils.load_data_from_pickle("{}s_train.p".format(args.task_type),
-                                               args.data_size)
-    raw_cv = lg_utils.load_data_from_pickle("{}s_cv.p".format(args.task_type),
-                                               args.data_size)
-    raw_test = lg_utils.load_data_from_pickle("{}s_test.p".format(args.task_type),
-                                               args.data_size)
-    
-    char_encoder = XEncoder(config.EMBEDDING_PATH)
-    vars(args)['embedding_dim'] = char_encoder.embedding_dim
-    if args.task_type == "page":
-        tag_encoder = YEncoder([INS_TAG, EOS_TAG])
-    else:
-        tagset = set(itertools.chain.from_iterable([r.orig_tags for r in raw_train]))
-        tagset = ["<BEG>", "<END>"] + sorted(list(tagset))
-        tag_encoder = YEncoder(tagset)
-#    vars(args)['tag_dim'] = char_encoder.embedding_dim
-    model = LSTMCRFTagger(logger, args, tag_encoder.get_tag_dim())
-    optimizer = optim.SGD(model.parameters(), lr=args.learning_rate)
-    
-    # Load models if it was previously saved and want to continue
-    if os.path.exists(model_path) and not args.need_train:
-        model.load_state_dict(torch.load(os.path.join(model_path, "final.pt")))
-        model.eval()
-    
-    # Training
-    # Step 1. Data preparation
-    training_data = lg_utils.get_data_from_samples(raw_train, char_encoder, tag_encoder)
-    cv_data = lg_utils.get_data_from_samples(raw_cv, char_encoder, tag_encoder)
-    test_data = lg_utils.get_data_from_samples(raw_test, char_encoder, tag_encoder)
-    
-    # TODO: train
-    
-    # Step 2. Model training
-    if args.need_train:
-        model.train_model(training_data, cv_data,  optimizer, args, model_path)
-        
-    # Step 3. Evaluation with correct ratio
-    lg_utils.correct_ratio_calculation(raw_train, model, "train", char_encoder, tag_encoder)
-    lg_utils.correct_ratio_calculation(raw_cv, model, "cv",char_encoder, tag_encoder)
-    lg_utils.correct_ratio_calculation(raw_test, model, "test",char_encoder, tag_encoder)
+    process.train(logger, args)
+    process.test(logger, args)
     raise RuntimeError
     
     # TODO: produce

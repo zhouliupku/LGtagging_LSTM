@@ -5,6 +5,9 @@ Created on Tue Nov 12 22:56:23 2019
 @author: Zhou
 """
 
+import os
+
+
 NULL_TAG = "null"
 
 PADDING_CHAR = '○'

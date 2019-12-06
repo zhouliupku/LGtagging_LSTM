@@ -18,12 +18,12 @@ PLOT_PATH = os.path.join(os.getcwd(), "plot")
 
 class Tagger(nn.Module):
 
-    def __init__(self, logger, args, tag_dim):
+    def __init__(self, logger, args, x_encoder, y_encoder):
         super(Tagger, self).__init__()
         self.logger = logger
-        self.embedding_dim = args.embedding_dim
         self.hidden_dim = args.hidden_dim
-        self.tag_dim = tag_dim
+        self.x_encoder = x_encoder
+        self.y_encoder = y_encoder
         self.bidirectional = args.bidirectional
         self.model_setup()
         
@@ -108,12 +108,12 @@ class Tagger(nn.Module):
 class LSTMTagger(Tagger):
         
     def model_setup(self):
-        self.lstm = nn.LSTM(self.embedding_dim, self.hidden_dim,
+        self.lstm = nn.LSTM(self.x_encoder.get_dim(), self.hidden_dim,
                             bidirectional=self.bidirectional)
         if self.bidirectional:
-            self.hidden2tag = nn.Linear(self.hidden_dim*2, self.tag_dim)
+            self.hidden2tag = nn.Linear(self.hidden_dim*2, self.y_encoder.get_dim())
         else:
-            self.hidden2tag = nn.Linear(self.hidden_dim, self.tag_dim)
+            self.hidden2tag = nn.Linear(self.hidden_dim, self.y_encoder.get_dim())
 
     def forward(self, sentence):
         lstm_out, _ = self.lstm(sentence.view(sentence.shape[0], 1, -1))
@@ -125,18 +125,18 @@ class LSTMTagger(Tagger):
 class TwoLayerLSTMTagger(Tagger):
         
     def model_setup(self):
-        self.lstm1 = nn.LSTM(self.embedding_dim, self.hidden_dim,
+        self.lstm1 = nn.LSTM(self.x_encoder.get_dim(), self.hidden_dim,
                              bidirectional=self.bidirectional)
         self.lstm2 = nn.LSTM(self.hidden_dim, self.hidden_dim,
                              bidirectional=self.bidirectional)
         if self.bidirectional:
             self.lstm2 = nn.LSTM(self.hidden_dim*2, self.hidden_dim,
                                  bidirectional=self.bidirectional)
-            self.hidden2tag = nn.Linear(self.hidden_dim*2, self.tag_dim)
+            self.hidden2tag = nn.Linear(self.hidden_dim*2, self.y_encoder.get_dim())
         else:
             self.lstm2 = nn.LSTM(self.hidden_dim, self.hidden_dim,
                                  bidirectional=self.bidirectional)
-            self.hidden2tag = nn.Linear(self.hidden_dim, self.tag_dim)
+            self.hidden2tag = nn.Linear(self.hidden_dim, self.y_encoder.get_dim())
 
     def forward(self, sentence):
         lstm_out1, _ = self.lstm1(sentence.view(sentence.shape[0], 1, -1))
@@ -149,14 +149,14 @@ class TwoLayerLSTMTagger(Tagger):
 class LSTMCRFTagger(Tagger):
         
     def model_setup(self):
-        self.lstm = nn.LSTM(self.embedding_dim, self.hidden_dim,
+        self.lstm = nn.LSTM(self.x_encoder.get_dim(), self.hidden_dim,
                             bidirectional=self.bidirectional)
         if self.bidirectional:
-            self.hidden2tag = nn.Linear(self.hidden_dim*2, self.tag_dim)
+            self.hidden2tag = nn.Linear(self.hidden_dim*2, self.y_encoder.get_dim())
         else:
-            self.hidden2tag = nn.Linear(self.hidden_dim, self.tag_dim)
+            self.hidden2tag = nn.Linear(self.hidden_dim, self.y_encoder.get_dim())
             
-        self.crf = CRF(self.tag_dim)
+        self.crf = CRF(self.y_encoder.get_dim())
 
     def forward(self, sentence):
         lstm_out, _ = self.lstm(sentence.view(sentence.shape[0], 1, -1))
