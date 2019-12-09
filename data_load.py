@@ -74,7 +74,7 @@ class XYDataLoader(DataLoader):
             lines = txtfile.readlines()
         if mode == "train":
             df = pd.read_excel(tag_filename)
-        elif mode == "test":
+        elif mode == "produce":
             df = None
         else:
             raise ValueError("Unsupported mode: {}".format(mode))
@@ -119,7 +119,7 @@ class XYDataLoader(DataLoader):
                         r = Record(record_txt, tags)
                     records.append(r)
     
-            elif mode == "test":
+            elif mode == "produce":
                 pass
             else:
                 raise ValueError("Unsupported mode:" + str(mode))
@@ -128,16 +128,16 @@ class XYDataLoader(DataLoader):
             
     def get_file(self, mode, n=None):
         if n is None:
-            return ValueError("Loader does not support unspecified size")
+            raise ValueError("Loader does not support unspecified size")
         if mode == "train":
             return [(os.path.join(self.datapath, "train", "text{}.txt".format(i)),
                         os.path.join(self.datapath, "train", "tag{}.xlsx".format(i))) \
                         for i in range(n)]
-        elif mode == "test":
+        elif mode == "produce":
             return [(os.path.join(self.datapath, "test", "text{}.txt".format(i)), None)
                             for i in range(n)]
         else:
-            raise ValueError
+            raise ValueError("Unsupported mode!")
             
     def get_person_tag(self):
         return "人名"
@@ -214,7 +214,7 @@ class HtmlDataLoader(DataLoader):
                 return tagged_filelist
             else:
                 return tagged_filelist[:n]
-        elif mode == "test":
+        elif mode == "produce":
             raise NotImplementedError
         else:
             raise ValueError
@@ -290,10 +290,10 @@ def dump_data_to_pickle(d, filename, size):
 
 
 if __name__ == "__main__":    
-    N_SECTION_TRAIN = None
-    N_SECTION_TEST = 1
-    SOURCE_TYPE = "html"
-    SIZE = "medium"
+    N_SECTION = 1
+    MODE = "produce"
+    SOURCE_TYPE = "XY"
+    SIZE = "tiny"
     # Set up data loaders
     if SOURCE_TYPE == "XY":
         loader = XYDataLoader()
@@ -301,7 +301,6 @@ if __name__ == "__main__":
         loader = HtmlDataLoader(SIZE)
     else:
         raise ValueError
-    test_loader = XYDataLoader()
     
     # Model hyper-parameter definition
     interested_tags = [loader.get_person_tag()]
@@ -316,12 +315,16 @@ if __name__ == "__main__":
     if SIZE == "full":
         interested_tags = None
     
-    data = loader.load_data(interested_tags, "train", N_SECTION_TRAIN)
+    data = loader.load_data(interested_tags, MODE, N_SECTION)
     
-    dump_data_to_pickle(data[0], "pages_train.p", SIZE)
-    dump_data_to_pickle(data[1], "pages_cv.p", SIZE)
-    dump_data_to_pickle(data[2], "pages_test.p", SIZE)
-    dump_data_to_pickle(data[3], "records_train.p", SIZE)
-    dump_data_to_pickle(data[4], "records_cv.p", SIZE)
-    dump_data_to_pickle(data[5], "records_test.p", SIZE)
+    if MODE == "train":
+        dump_data_to_pickle(data[0], "pages_train.p", SIZE)
+        dump_data_to_pickle(data[1], "pages_cv.p", SIZE)
+        dump_data_to_pickle(data[2], "pages_test.p", SIZE)
+        dump_data_to_pickle(data[3], "records_train.p", SIZE)
+        dump_data_to_pickle(data[4], "records_cv.p", SIZE)
+        dump_data_to_pickle(data[5], "records_test.p", SIZE)
+    else:
+        dump_data_to_pickle(data[0], "pages_produce.p", SIZE)
+        
     
