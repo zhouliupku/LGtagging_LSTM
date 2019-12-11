@@ -38,10 +38,13 @@ class Page(object):
         """
         get y sequence as tensor
         """
+        return encoder.encode(self.get_tag())
+    
+    def get_tag(self):
         tags = [INS_TAG for i in range(len(self.txt))]
         for i in self.eos_idx:
             tags[i] = EOS_TAG
-        return encoder.encode(tags)
+        return tags
     
     def get_sep_len(self):
         """
@@ -94,7 +97,10 @@ class Record(object):
         """
         get y sequence as tensor
         """
-        return encoder.encode([cs.get_tag() for cs in self.chars])
+        return encoder.encode(self.get_tag())
+    
+    def get_tag(self):
+        return [cs.get_tag() for cs in self.chars]
     
     def __str__(self):
         return ''.join([c.get_char() for c in self.chars[1:-1]])

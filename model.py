@@ -8,7 +8,7 @@ Created on Mon Oct 21 17:45:36 2019
 import os
 import pickle
 import torch
-from torch import nn
+from torch import nn, optim
 from torchcrf import CRF
 import matplotlib.pyplot as plt
 import datetime
@@ -27,6 +27,7 @@ class Tagger(nn.Module):
         self.y_encoder = y_encoder
         self.bidirectional = args.bidirectional
         self.model_setup()
+        self.save_path = None
         
     def calc_loss(self, tag_scores, targets, loss_func):
         return loss_func(tag_scores, targets)
@@ -36,8 +37,8 @@ class Tagger(nn.Module):
         pickle.dump(self.x_encoder, open(os.path.join(save_path, "x_encoder.p"), "wb"))
         pickle.dump(self.y_encoder, open(os.path.join(save_path, "y_encoder.p"), "wb"))
 
-    def train_model(self, training_data, cv_data,
-                    optimizer, args, save_path, need_plot=False):
+    def train_model(self, training_data, cv_data, args, need_plot=False):
+        optimizer = optim.SGD(self.parameters(), lr=args.learning_rate)
         if args.loss_type == "NLL":
             loss_function = nn.NLLLoss()
         else:
@@ -73,7 +74,7 @@ class Tagger(nn.Module):
             self.logger.info("CV Loss = {}".format(loss.item()))
                 
             # Save model snapshot
-            self.save_model(save_path, epoch)
+            self.save_model(self.save_path, epoch)
          
         # Plot the loss function
         if need_plot:
@@ -88,7 +89,7 @@ class Tagger(nn.Module):
             plt.close()
         
         # Save final model
-        self.save_model(save_path, "_final")
+        self.save_model(self.save_path, "_final")
 
     def evaluate_model(self, test_data, y_encoder):
         """
@@ -177,3 +178,48 @@ class LSTMCRFTagger(Tagger):
         return torch.tensor(self.crf.decode(tag_scores.view(tag_scores.shape[0],1,-1))[0],
                             dtype=torch.long)
         
+        
+class ModelFactory(object):
+    def __init__(self):
+        self.model_root_path = os.path.join(os.getcwd(), "models")
+        
+    def get_new_model(self, logger, args, x_encoder, y_encoder):
+        if args.model_type == "LSTM":
+            model = LSTMTagger(logger, args, x_encoder, y_encoder)
+        if args.model_type == "TwoLayerLSTM":
+            model = TwoLayerLSTMTagger(logger, args, x_encoder, y_encoder)
+        if args.model_type == "LSTMCRF":
+            model = LSTMCRFTagger(logger, args, x_encoder, y_encoder)
+        self.setup_saving(model, args)
+        return model
+        
+    def get_trained_model(self, logger, args):
+        model_path = os.path.join(self.model_root_path,
+                                  "{}_model".format(args.task_type),
+                                  args.model_type,
+                                  args.model_alias)
+        if not os.path.isdir(model_path):
+            raise FileNotFoundError("No such model!")
+        x_encoder = pickle.load(open(os.path.join(model_path, "x_encoder.p"), "rb"))
+        y_encoder = pickle.load(open(os.path.join(model_path, "y_encoder.p"), "rb"))
+        
+        if args.model_type == "LSTM":
+            model = LSTMTagger(logger, args, x_encoder, y_encoder)
+        if args.model_type == "TwoLayerLSTM":
+            model = TwoLayerLSTMTagger(logger, args, x_encoder, y_encoder)
+        if args.model_type == "LSTMCRF":
+            model = LSTMCRFTagger(logger, args, x_encoder, y_encoder)
+            
+        model.load_state_dict(torch.load(os.path.join(model_path, "epoch_final.pt")))
+        model.eval()
+        self.setup_saving(model, args)
+        return model
+    
+    def setup_saving(self, model, args):
+        save_path = os.path.join(self.model_root_path,
+                                  "{}_model".format(args.task_type),
+                                  args.model_type,
+                                  args.model_alias)
+        model.save_path = save_path
+        if not os.path.isdir(save_path):
+            os.makedirs(save_path)

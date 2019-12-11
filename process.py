@@ -7,17 +7,14 @@ Created on Wed Dec  4 21:31:29 2019
 
 import os
 import re
-import pickle
 import datetime
 import itertools
-import torch
-from torch import optim
 
 import lg_utils
 import config
 from Encoders import XEncoder, YEncoder
 from data_save import ExcelSaver, HtmlSaver
-from model import LSTMTagger, TwoLayerLSTMTagger, LSTMCRFTagger
+from model import ModelFactory
 
 
 def train(logger, args):
@@ -38,15 +35,12 @@ def train(logger, args):
         tagset = set(itertools.chain.from_iterable([r.orig_tags for r in raw_train]))
         tagset = ["<BEG>", "<END>"] + sorted(list(tagset))
         tag_encoder = YEncoder(tagset)
-    model = LSTMCRFTagger(logger, args, char_encoder, tag_encoder)
+    model = ModelFactory().get_new_model(logger, args, char_encoder, tag_encoder)
     
     # Load models if it was previously saved and want to continue
-    model_path = os.path.join(config.REGEX_PATH, "{}_model".format(args.task_type))
-    if os.path.exists(model_path) and not args.need_train:
-        model.load_state_dict(torch.load(os.path.join(model_path, "final.pt")))
-        model.eval()
-    # TODO: see if I can put optimizer initialization into model initialization
-    optimizer = optim.SGD(model.parameters(), lr=args.learning_rate)
+#    if os.path.exists(model_path) and not args.need_train:
+#        model.load_state_dict(torch.load(os.path.join(model_path, "final.pt")))
+#        model.eval()
     
     # Training
     # Step 1. Data preparation
@@ -55,7 +49,9 @@ def train(logger, args):
     
     # Step 2. Model training
     if args.need_train:
-        model.train_model(training_data, cv_data, optimizer, args, model_path)
+        model.train_model(training_data, cv_data, args)
+    else:
+        model = ModelFactory().get_trained_model(logger, args)
         
     # Step 3. Evaluation with correct ratio
     lg_utils.correct_ratio_calculation(raw_train, model, "train", char_encoder, tag_encoder)
@@ -68,18 +64,9 @@ def test(logger, args):
     """
     raw_test = lg_utils.load_data_from_pickle("{}s_test.p".format(args.task_type),
                                                args.data_size)
-    
-    model_path = os.path.join(config.REGEX_PATH, "{}_model".format(args.task_type))
-    x_encoder = pickle.load(open(os.path.join(model_path, "x_encoder.p"), "rb"))
-    y_encoder = pickle.load(open(os.path.join(model_path, "y_encoder.p"), "rb"))
-    
-    if not os.path.exists(model_path):
-        raise FileNotFoundError("No model found")
-    model = LSTMCRFTagger(logger, args, x_encoder, y_encoder)
-    # TODO: how to make load_state_dict function knowing model type?
-    model.load_state_dict(torch.load(os.path.join(model_path, "final.pt")))
-    model.eval()
-    lg_utils.correct_ratio_calculation(raw_test, model, "test", x_encoder, y_encoder)
+    model = ModelFactory().get_trained_model(logger, args)
+    lg_utils.correct_ratio_calculation(raw_test, model, "test", 
+                                       model.x_encoder, model.y_encoder)
     
     
 def produce(logger, args):
@@ -104,40 +91,29 @@ def produce(logger, args):
             tags[-1] = config.EOS_TAG
             tag_seq_list.append(tags)
     else:
-        model_path = os.path.join(config.REGEX_PATH, "page_model")
-        x_encoder = pickle.load(open(os.path.join(model_path, "x_encoder.p"), "rb"))
-        y_encoder = pickle.load(open(os.path.join(model_path, "y_encoder.p"), "rb"))
-        page_model = LSTMCRFTagger(logger, args, x_encoder, y_encoder)
-        if not os.path.exists(model_path):
-            raise ValueError("No model found!")
-        page_model.load_state_dict(torch.load(os.path.join(model_path, "final.pt")))
-        page_model.eval()
+        vars(args)["task_type"] = "page"
+        page_model = ModelFactory().get_trained_model(logger, args)
         # Data preparation
-        data = lg_utils.get_data_from_samples(pages_produce, x_encoder, y_encoder)
-        tag_seq_list = page_model.evaluate_model(data, y_encoder)
+        data = lg_utils.get_data_from_samples(pages_produce, page_model.x_encoder, page_model.y_encoder)
+        # Get results
+        tag_seq_list = page_model.evaluate_model(data, page_model.y_encoder)
             
-#   Step 3. using trained record model, tag each sentence
-    # TODO: support model type in args
-    # 3.1 Prepare data
+    #   Step 3. using trained record model, tag each sentence
+    # Get model
+    vars(args)["task_type"] = "record"
+    record_model = ModelFactory().get_trained_model(logger, args)
+    # TODO: allow diff model types for page and record in producing
+    # Prepare data
     record_test_data = []
     records = []
     for p, pl in zip(pages_produce, 
                      lg_utils.get_sent_len_for_pages(tag_seq_list, config.EOS_TAG)):
         rs = p.separate_sentence(pl)
         records.extend(rs)
-        record_test_data.extend([r.get_x(x_encoder) for r in rs])
+        record_test_data.extend([r.get_x(record_model.x_encoder) for r in rs])
         
-    model_path = os.path.join(config.REGEX_PATH, "record_model")
-    x_encoder = pickle.load(open(os.path.join(model_path, "x_encoder.p"), "rb"))
-    y_encoder = pickle.load(open(os.path.join(model_path, "y_encoder.p"), "rb"))
-    
-    # 3.2 Prepare model
-    record_model = LSTMCRFTagger(logger, args, x_encoder, y_encoder)
-    if not os.path.exists(model_path):
-        raise ValueError("No model found!")
-    record_model.load_state_dict(torch.load(os.path.join(model_path, "final.pt")))
-    record_model.eval()
-    tagged_sent = record_model.evaluate_model(record_test_data, y_encoder)
+    # Use trained model to process
+    tagged_sent = record_model.evaluate_model(record_test_data, record_model.y_encoder)
     for record, tag_list in zip(records, tagged_sent):
         record.set_tag(tag_list)
         
@@ -149,4 +125,4 @@ def produce(logger, args):
     else:
         saver = ExcelSaver(records)
         filename = os.path.join(config.OUTPUT_PATH, "test_{}.xlsx".format(curr_time))
-    saver.save(filename, y_encoder.tag_dict.values())
+    saver.save(filename, record_model.y_encoder.tag_dict.values())

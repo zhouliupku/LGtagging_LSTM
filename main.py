@@ -33,7 +33,12 @@ parser.add_argument('--saver_type', type=str, default='html',
 parser.add_argument('--task_type', type=str, default='page', 
                     choices=['page', 'record'],
                     help='Type of task')
-parser.add_argument('--process_type', type=str, default='page', 
+parser.add_argument('--model_type', type=str, default='LSTM', 
+                    choices=['LSTM', 'TwoLayerLSTM', 'LSTMCRF'],
+                    help='Type of model')
+parser.add_argument('--model_alias', type=str, default='unnamed_model', 
+                    help='Alias to specify variants of same type of model')
+parser.add_argument('--process_type', type=str, default='train', 
                     choices=['train', 'test', 'produce'],
                     help='Type of process')
 parser.add_argument('--loss_type', type=str, default='NLL', 
