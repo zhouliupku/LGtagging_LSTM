@@ -194,10 +194,7 @@ class ModelFactory(object):
         return model
         
     def get_trained_model(self, logger, args):
-        model_path = os.path.join(self.model_root_path,
-                                  "{}_model".format(args.task_type),
-                                  args.model_type,
-                                  args.model_alias)
+        model_path = self.format_path(args)
         if not os.path.isdir(model_path):
             raise FileNotFoundError("No such model!")
         x_encoder = pickle.load(open(os.path.join(model_path, "x_encoder.p"), "rb"))
@@ -216,10 +213,14 @@ class ModelFactory(object):
         return model
     
     def setup_saving(self, model, args):
-        save_path = os.path.join(self.model_root_path,
-                                  "{}_model".format(args.task_type),
-                                  args.model_type,
-                                  args.model_alias)
+        save_path = self.format_path(args)
         model.save_path = save_path
         if not os.path.isdir(save_path):
             os.makedirs(save_path)
+            
+    def format_path(self, args):
+        return os.path.join(self.model_root_path,
+                          "{}_model".format(args.task_type),
+                          args.data_size,
+                          args.model_type,
+                          args.model_alias)
