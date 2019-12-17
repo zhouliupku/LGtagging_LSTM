@@ -6,45 +6,50 @@ Created on Mon Oct 21 17:45:36 2019
 """
 
 import os
+import pickle
 import torch
-from torch import nn
+from torch import nn, optim
 from torchcrf import CRF
 import matplotlib.pyplot as plt
 import datetime
 import math
 
-PLOT_PATH = os.path.join(os.getcwd(), "plot")
+import config
 
 
 class Tagger(nn.Module):
 
-    def __init__(self, logger, embedding_dim, hidden_dim, tag_dim,
-                 bidirectional=False):
+    def __init__(self, logger, args, x_encoder, y_encoder):
         super(Tagger, self).__init__()
         self.logger = logger
-        self.embedding_dim = embedding_dim
-        self.hidden_dim = hidden_dim
-        self.tag_dim = tag_dim
-        self.bidirectional = bidirectional
+        self.hidden_dim = args.hidden_dim
+        self.x_encoder = x_encoder
+        self.y_encoder = y_encoder
+        self.bidirectional = args.bidirectional
         self.model_setup()
+        self.save_path = None
         
     def calc_loss(self, tag_scores, targets, loss_func):
         return loss_func(tag_scores, targets)
+    
+    def save_model(self, save_path, epoch):
+        torch.save(self.state_dict(), os.path.join(save_path, "epoch{}.pt".format(epoch)))
+        pickle.dump(self.x_encoder, open(os.path.join(save_path, "x_encoder.p"), "wb"))
+        pickle.dump(self.y_encoder, open(os.path.join(save_path, "y_encoder.p"), "wb"))
 
-    def train_model(self, training_data, cv_data,
-                    optimizer, loss_type, n_epoch, n_check, 
-                    n_save, save_path, need_plot=False):
-        if loss_type == "NLL":
+    def train_model(self, training_data, cv_data, args, need_plot=False):
+        optimizer = optim.SGD(self.parameters(), lr=args.learning_rate)
+        if args.loss_type == "NLL":
             loss_function = nn.NLLLoss()
         else:
-            raise ValueError("Unsupported loss type: {}".format(loss_type))
+            raise ValueError("Unsupported loss type")
             
         losses_train = []
         losses_cv = []
         if need_plot:
             plt.figure(figsize=[20, 10])
         
-        for epoch in range(n_epoch):
+        for epoch in range(args.n_epoch):
             # Use training data to train
             sum_loss_train = 0
             for sentence, targets in training_data:
@@ -55,10 +60,9 @@ class Tagger(nn.Module):
                 loss.backward(retain_graph=True)
                 optimizer.step()
             losses_train.append(sum_loss_train / len(training_data))
-            if epoch % n_check == 0:
-                self.logger.info("Epoch {}".format(epoch))
-                self.logger.info("Training Loss = {}".format(loss.item()))
-                
+            self.logger.info("Epoch {}".format(epoch))
+            self.logger.info("Training Loss = {}".format(loss.item()))
+
             # Use CV data to validate
             with torch.no_grad():
                 sum_loss_cv = 0
@@ -67,13 +71,10 @@ class Tagger(nn.Module):
                     loss = loss_function(tag_scores, targets)
                     sum_loss_cv += loss.item()
                 losses_cv.append(sum_loss_cv / len(cv_data))
-            if epoch % n_check == 0:
-                self.logger.info("CV Loss = {}".format(loss.item()))
+            self.logger.info("CV Loss = {}".format(loss.item()))
                 
             # Save model snapshot
-            if epoch % n_save == 0:
-                torch.save(self.state_dict(), 
-                           os.path.join(save_path, "epoch{}.pt".format(epoch)))
+            self.save_model(self.save_path, epoch)
          
         # Plot the loss function
         if need_plot:
@@ -84,12 +85,11 @@ class Tagger(nn.Module):
             plt.legend(["Train", "CV"])
             curr_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
             filename = "plot"+curr_time+".png"
-            plt.savefig(os.path.join(PLOT_PATH, filename))
+            plt.savefig(os.path.join(config.PLOT_PATH, filename))
             plt.close()
         
         # Save final model
-        torch.save(self.state_dict(), 
-                   os.path.join(save_path, "final.pt"))
+        self.save_model(self.save_path, "_final")
 
     def evaluate_model(self, test_data, y_encoder):
         """
@@ -113,12 +113,12 @@ class Tagger(nn.Module):
 class LSTMTagger(Tagger):
         
     def model_setup(self):
-        self.lstm = nn.LSTM(self.embedding_dim, self.hidden_dim,
+        self.lstm = nn.LSTM(self.x_encoder.get_dim(), self.hidden_dim,
                             bidirectional=self.bidirectional)
         if self.bidirectional:
-            self.hidden2tag = nn.Linear(self.hidden_dim*2, self.tag_dim)
+            self.hidden2tag = nn.Linear(self.hidden_dim*2, self.y_encoder.get_dim())
         else:
-            self.hidden2tag = nn.Linear(self.hidden_dim, self.tag_dim)
+            self.hidden2tag = nn.Linear(self.hidden_dim, self.y_encoder.get_dim())
 
     def forward(self, sentence):
         lstm_out, _ = self.lstm(sentence.view(sentence.shape[0], 1, -1))
@@ -130,18 +130,18 @@ class LSTMTagger(Tagger):
 class TwoLayerLSTMTagger(Tagger):
         
     def model_setup(self):
-        self.lstm1 = nn.LSTM(self.embedding_dim, self.hidden_dim,
+        self.lstm1 = nn.LSTM(self.x_encoder.get_dim(), self.hidden_dim,
                              bidirectional=self.bidirectional)
         self.lstm2 = nn.LSTM(self.hidden_dim, self.hidden_dim,
                              bidirectional=self.bidirectional)
         if self.bidirectional:
             self.lstm2 = nn.LSTM(self.hidden_dim*2, self.hidden_dim,
                                  bidirectional=self.bidirectional)
-            self.hidden2tag = nn.Linear(self.hidden_dim*2, self.tag_dim)
+            self.hidden2tag = nn.Linear(self.hidden_dim*2, self.y_encoder.get_dim())
         else:
             self.lstm2 = nn.LSTM(self.hidden_dim, self.hidden_dim,
                                  bidirectional=self.bidirectional)
-            self.hidden2tag = nn.Linear(self.hidden_dim, self.tag_dim)
+            self.hidden2tag = nn.Linear(self.hidden_dim, self.y_encoder.get_dim())
 
     def forward(self, sentence):
         lstm_out1, _ = self.lstm1(sentence.view(sentence.shape[0], 1, -1))
@@ -154,14 +154,14 @@ class TwoLayerLSTMTagger(Tagger):
 class LSTMCRFTagger(Tagger):
         
     def model_setup(self):
-        self.lstm = nn.LSTM(self.embedding_dim, self.hidden_dim,
+        self.lstm = nn.LSTM(self.x_encoder.get_dim(), self.hidden_dim,
                             bidirectional=self.bidirectional)
         if self.bidirectional:
-            self.hidden2tag = nn.Linear(self.hidden_dim*2, self.tag_dim)
+            self.hidden2tag = nn.Linear(self.hidden_dim*2, self.y_encoder.get_dim())
         else:
-            self.hidden2tag = nn.Linear(self.hidden_dim, self.tag_dim)
+            self.hidden2tag = nn.Linear(self.hidden_dim, self.y_encoder.get_dim())
             
-        self.crf = CRF(self.tag_dim)
+        self.crf = CRF(self.y_encoder.get_dim())
 
     def forward(self, sentence):
         lstm_out, _ = self.lstm(sentence.view(sentence.shape[0], 1, -1))
@@ -178,3 +178,49 @@ class LSTMCRFTagger(Tagger):
         return torch.tensor(self.crf.decode(tag_scores.view(tag_scores.shape[0],1,-1))[0],
                             dtype=torch.long)
         
+        
+class ModelFactory(object):
+    def __init__(self):
+        self.model_root_path = os.path.join(os.getcwd(), "models")
+        
+    def get_new_model(self, logger, args, x_encoder, y_encoder):
+        if args.model_type == "LSTM":
+            model = LSTMTagger(logger, args, x_encoder, y_encoder)
+        if args.model_type == "TwoLayerLSTM":
+            model = TwoLayerLSTMTagger(logger, args, x_encoder, y_encoder)
+        if args.model_type == "LSTMCRF":
+            model = LSTMCRFTagger(logger, args, x_encoder, y_encoder)
+        self.setup_saving(model, args)
+        return model
+        
+    def get_trained_model(self, logger, args):
+        model_path = self.format_path(args)
+        if not os.path.isdir(model_path):
+            raise FileNotFoundError("No such model!")
+        x_encoder = pickle.load(open(os.path.join(model_path, "x_encoder.p"), "rb"))
+        y_encoder = pickle.load(open(os.path.join(model_path, "y_encoder.p"), "rb"))
+        
+        if args.model_type == "LSTM":
+            model = LSTMTagger(logger, args, x_encoder, y_encoder)
+        if args.model_type == "TwoLayerLSTM":
+            model = TwoLayerLSTMTagger(logger, args, x_encoder, y_encoder)
+        if args.model_type == "LSTMCRF":
+            model = LSTMCRFTagger(logger, args, x_encoder, y_encoder)
+            
+        model.load_state_dict(torch.load(os.path.join(model_path, "epoch_final.pt")))
+        model.eval()
+        self.setup_saving(model, args)
+        return model
+    
+    def setup_saving(self, model, args):
+        save_path = self.format_path(args)
+        model.save_path = save_path
+        if not os.path.isdir(save_path):
+            os.makedirs(save_path)
+            
+    def format_path(self, args):
+        return os.path.join(self.model_root_path,
+                          "{}_model".format(args.task_type),
+                          args.data_size,
+                          args.model_type,
+                          args.model_alias)

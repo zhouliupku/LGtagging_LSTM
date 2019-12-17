@@ -10,7 +10,7 @@ import re
 import pickle
 import numpy as np
 
-from config import NULL_TAG, PADDING_CHAR
+from config import NULL_TAG, PADDING_CHAR, EOS_TAG
 
 def convert_to_orig(s):
     """
@@ -89,20 +89,24 @@ def get_keywords_from_tagged_record(char_samples, tag_name):
 def get_data_from_samples(samples, x_encoder, y_encoder):
     return [(p.get_x(x_encoder), p.get_y(y_encoder)) for p in samples]
 
-def correct_ratio_calculation(records, model, subset_name,
+def correct_ratio_calculation(samples, model, args, subset_name,
                               input_encoder, output_encoder):
     '''
     Take in records, input_encoder, model, output_encoder 
     Get the predict tags and return the correct ratio
     '''
-    inputs = [r.get_x(input_encoder) for r in records]
-    tag_pred = model.evaluate_model(inputs, output_encoder)
-    tag_true = [[c.get_tag() for c in r.chars] for r in records]
-    upstairs = [sum([p==t for p,t in zip(ps, ts)]) for ps, ts in zip(tag_pred, tag_true)]
-    downstairs = [len(r) for r in tag_pred]
+    inputs = [s.get_x(input_encoder) for s in samples]
+    tag_pred = model.evaluate_model(inputs, output_encoder)   #list of list of tag
+    tag_true = [s.get_tag() for s in samples]     #list of list of tag
+    if args.task_type == "page":    #only calculate the EOS tag for page model
+        upstairs = [sum([p==t for p,t in zip(ps, ts) if t == EOS_TAG]) \
+                              for ps, ts in zip(tag_pred, tag_true)]
+        downstairs = [len([r for r in rs if r == EOS_TAG]) for rs in tag_true]
+    else:
+        upstairs = [sum([p==t for p,t in zip(ps, ts)]) for ps, ts in zip(tag_pred, tag_true)]
+        downstairs = [len(r) for r in tag_pred]
     correct_ratio = sum(upstairs) / float(sum(downstairs))
-    print("The correct ratio of {} set is {}".format(subset_name,
-          correct_ratio))
+    print("The correct ratio of {} set is {}".format(subset_name, correct_ratio))
     return correct_ratio
 
 

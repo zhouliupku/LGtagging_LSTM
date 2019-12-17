@@ -25,12 +25,19 @@ class Encoder(object):
         """
         raise NotImplementedError
     
+    def get_dim(self):
+        """
+        Return the encoding dimension of encoder
+        """
+        raise NotImplementedError
+    
     
 class XEncoder(Encoder):
-    def __init__(self, embedding_dim, embedding_filename):
+    def __init__(self, embedding_filename):
         with open(embedding_filename,'rb') as infile:
             vocab, vectors = pickle.load(infile, encoding='latin1')
-        self.word_embeddings = nn.Embedding(len(vocab), embedding_dim)
+        self.embedding_dim = vectors.shape[1]
+        self.word_embeddings = nn.Embedding(len(vocab), vectors.shape[1])
         self.word_id = {v:idx for idx, v in enumerate(vocab)}
         self.word_embeddings.weight.data.copy_(torch.from_numpy(vectors))
     
@@ -39,6 +46,9 @@ class XEncoder(Encoder):
                 else self.word_id["<UNK>"] for w in series]
         sentence = torch.tensor(idxs, dtype=torch.long)
         return self.word_embeddings(sentence)
+    
+    def get_dim(self):
+        return self.embedding_dim
         
 
 class YEncoder(Encoder):
@@ -57,4 +67,7 @@ class YEncoder(Encoder):
     
     def decode(self, res_tensor):
         return [self.tag_index_dict[t.item()] for t in res_tensor]
+    
+    def get_dim(self):
+        return self.get_tag_dim()       # TODO: unify
     
