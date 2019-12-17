@@ -54,8 +54,8 @@ def train(logger, args):
         model = ModelFactory().get_trained_model(logger, args)
         
     # Step 3. Evaluation with correct ratio
-    lg_utils.correct_ratio_calculation(raw_train, model, "train", char_encoder, tag_encoder)
-    lg_utils.correct_ratio_calculation(raw_cv, model, "cv", char_encoder, tag_encoder)
+    lg_utils.correct_ratio_calculation(raw_train, model, args, "train", char_encoder, tag_encoder)
+    lg_utils.correct_ratio_calculation(raw_cv, model, args, "cv", char_encoder, tag_encoder)
     
     
 def test(logger, args):
