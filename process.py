@@ -27,7 +27,7 @@ def train(logger, args):
     raw_cv = lg_utils.load_data_from_pickle("{}s_cv.p".format(args.task_type),
                                                args.data_size)
     
-    char_encoder = XEncoder(config.EMBEDDING_PATH)
+    char_encoder = XEncoder(os.path.join(config.EMBEDDING_PATH, "polyglot-zh_char.pkl"))
 #    vars(args)['embedding_dim'] = char_encoder.embedding_dim
     if args.task_type == "page":
         tag_encoder = YEncoder([config.INS_TAG, config.EOS_TAG])
