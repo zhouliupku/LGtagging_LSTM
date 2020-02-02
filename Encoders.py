@@ -70,11 +70,11 @@ class BertEncoder(Encoder):
                 text[i] = " [CLS] "    #the space is to avoid messy code
             elif x == "</S>":
                 text[i] = " [SEP] "
+            elif ord(x) > 0x9FFF:
+                text[i] = " [UNK] "
         tokenized_text = self.tokenizer.tokenize(''.join(text))
         indexed_tokens = self.tokenizer.convert_tokens_to_ids(tokenized_text)
         segments_ids = [0 for t in tokenized_text]
-        
-        print(tokenized_text)
 
         # convert inputs to PyTorch tensors
         tokens_tensor = torch.tensor([indexed_tokens])

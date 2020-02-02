@@ -25,8 +25,8 @@ def str2bool(v):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--data_size', type=str, default='tiny',
-                    choices=['tiny', 'small', 'medium', 'full'],
+parser.add_argument('--data_size', type=str, default='small',
+                    choices=['small', 'medium', 'full'],
                     help='Size of training data')
 parser.add_argument('--saver_type', type=str, default='html',
                     choices=['html', 'excel'],
