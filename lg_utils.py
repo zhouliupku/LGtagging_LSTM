@@ -10,7 +10,7 @@ import re
 import pickle
 import numpy as np
 
-from config import NULL_TAG, PADDING_CHAR, EOS_TAG
+from config import NULL_TAG, PADDING_CHAR, EOS_TAG, EMBEDDING_PATH, EMBEDDING_FILENAME_DICT
 
 def convert_to_orig(s):
     """
@@ -127,3 +127,7 @@ def correct_ratio_calculation(samples, model, args, subset_name,
 def load_data_from_pickle(filename, size):
     path = os.path.join(os.getcwd(), "data", size)
     return pickle.load(open(os.path.join(path, filename), "rb"))
+
+
+def get_filename_from_embed_type(embed_type):
+    return os.path.join(EMBEDDING_PATH, EMBEDDING_FILENAME_DICT[embed_type])

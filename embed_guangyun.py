@@ -26,7 +26,7 @@ def gen_one_hot(col):
     return word_list_one_hot
 
 if __name__ == "__main__":
-    
+    special_char_list = ["<S>", "</S>", "<UNK>"]
     df = pd.read_excel(os.path.join(config.EMBEDDING_PATH, "guangyun.xlsx"),
                            encoding='utf-8')
     feature_names = ["聲紐", "韻部原貌-平上去入相配爲平(調整前)", "呼", "等", "聲調"]
@@ -37,5 +37,11 @@ if __name__ == "__main__":
         assert len(emb) == len(chars)
     
     final_emb = np.array([list(itertools.chain.from_iterable(z)) for z in zip(*embs)])
+    for sc in special_char_list:
+        chars = np.append(chars, sc)
+        final_emb = np.concatenate((final_emb,
+                                    np.array([[0 for _ in range(final_emb.shape[1])]])),
+                    axis=0)
+    
     pickle.dump((tuple(chars), final_emb),
                 open(os.path.join(config.EMBEDDING_PATH, "MCP.p"), "wb"))

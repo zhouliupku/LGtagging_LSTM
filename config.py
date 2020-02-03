@@ -20,6 +20,8 @@ END_TAG = "<END>"
 OUTPUT_PATH = os.path.join(os.getcwd(), "result")
 REGEX_PATH = os.path.join(os.getcwd(), "models")
 EMBEDDING_PATH = os.path.join(os.getcwd(), "Embedding")
+EMBEDDING_FILENAME_DICT = {"polyglot": "polyglot-zh_char.pkl",
+                           "MCP": "MCP.p"}
 PLOT_PATH = os.path.join(os.getcwd(), "plot")
 
 BERT_DIM = 768

@@ -28,10 +28,7 @@ def train(logger, args):
                                                args.data_size)
     
     # Set up encoders
-    if args.input_encoder == "BERT":
-        char_encoder = BertEncoder()
-    else:
-        char_encoder = XEncoder(os.path.join(config.EMBEDDING_PATH, "polyglot-zh_char.pkl"))
+    char_encoder = XEncoder(args)
 #    vars(args)['embedding_dim'] = char_encoder.embedding_dim
     if args.task_type == "page":
         tag_encoder = YEncoder([config.INS_TAG, config.EOS_TAG, config.BEG_TAG, config.END_TAG])        # TODO: add <BEG>, <END>
