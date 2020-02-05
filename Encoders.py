@@ -99,9 +99,14 @@ class BertEncoder(Encoder):
                 text[i] = " [CLS] "    #the space is to avoid messy code
             elif x == "</S>":
                 text[i] = " [SEP] "
-            elif ord(x) > 0x9FFF:
+            elif ord(x) > 0x9FFF or ord(x) < 0x4e00:
                 text[i] = " [UNK] "
         tokenized_text = self.tokenizer.tokenize(''.join(text))
+#        if len(text) != len(tokenized_text):
+#            print(''.join(text))
+#            print(text)
+#            print(tokenized_text)
+#            raise ValueError
         indexed_tokens = self.tokenizer.convert_tokens_to_ids(tokenized_text)
         segments_ids = [0 for t in tokenized_text]
 

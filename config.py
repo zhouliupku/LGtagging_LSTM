@@ -25,3 +25,4 @@ EMBEDDING_FILENAME_DICT = {"polyglot": "polyglot-zh_char.pkl",
 PLOT_PATH = os.path.join(os.getcwd(), "plot")
 
 BERT_DIM = 768
+MAX_LEN = 512

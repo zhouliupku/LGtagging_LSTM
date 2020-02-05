@@ -8,10 +8,11 @@ Created on Mon Nov  4 22:59:19 2019
 import os
 import pickle
 import itertools
+import numpy as np
 from bs4 import BeautifulSoup as BS
 
 import lg_utils
-from config import NULL_TAG, PADDING_CHAR
+from config import NULL_TAG, PADDING_CHAR, MAX_LEN
 from DataStructures import Page, Record
 
 class DataLoader(object):
@@ -45,12 +46,6 @@ class DataLoader(object):
         print("Loaded {} pages for cross validation.".format(len(pages_cv)))
         print("Loaded {} pages for testing.".format(len(pages_test)))
         
-        #TODO: remove
-        for x in [pages_train, pages_cv, pages_test]:
-            print(x[0].txt)
-        for x in [records_train, records_cv, records_test]:
-            print([cs.get_char() for cs in x[0].chars])
-        
         return pages_train, pages_cv, pages_test, records_train, records_cv, records_test
        
         
@@ -73,6 +68,12 @@ class DataLoader(object):
             candi = page_text.split('】')
             if len(candi) != 2:
                 raise ValueError
+            if len(candi[1]) == 0:
+                print("Page {} is empty!".format(candi[0]))
+                continue
+            if len(candi[1]) >= MAX_LEN:
+                print("Page {} is too long!".format(candi[0]))
+                continue
             pid, txt = int(candi[0]), candi[1]
             page_tags = rest_tags[(len(candi[0]) + 2):(len(candi[0]) + 2 + len(txt))]
             rest_tags = rest_tags[(len(candi[0]) + 2 + len(txt)):]
@@ -120,7 +121,9 @@ class DataLoader(object):
         """
         Xs, Ys = [], []
         for line in lines:
-            line = line.replace(PADDING_CHAR, '') 
+            line = line.replace(PADDING_CHAR, '')
+#            line = line.replace(' ', '')
+#            line = line.replace('[T4]', '')
             soup = BS(line, "html.parser")
             with_tag_item = list(soup.find_all(recursive=False))
             result = []
@@ -175,6 +178,7 @@ def dump_data_to_pickle(d, filename, size):
 
 
 if __name__ == "__main__":
+    np.random.seed(0)
     for size in ["small", "medium", "full"]:
         loader = DataLoader(size)
         
