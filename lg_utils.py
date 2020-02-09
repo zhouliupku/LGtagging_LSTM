@@ -97,6 +97,42 @@ def get_data_from_samples(samples, x_encoder, y_encoder):
 #        
     return [(p.get_x(x_encoder), p.get_y(y_encoder)) for p in samples]
 
+def tag_correct_ratio(samples, model, subset_name, input_encoder, output_encoder):
+    '''
+    Return word-level correct ratio only for record model
+    '''
+    inputs = [s.get_x(input_encoder) for s in samples]
+    tag_pred = model.evaluate_model(inputs, output_encoder)   #list of list of tag
+    tag_true = [s.get_tag() for s in samples]   #list of list of tag
+    assert len(tag_pred) == len(tag_true)
+    correct_counts = [word_correct_count(ps, ts) for ps, ts in zip(tag_pred, tag_true)]
+    tag_correct_ratio = sum(correct_counts) / float(sum(map(len, tag_true)))
+    print("The tag correct ratio of {} set is {}".format(subset_name, tag_correct_ratio))
+    return tag_correct_ratio
+    
+    
+def word_correct_count(ps, ts):
+    """
+    given two lists of tags, count matched words
+    """
+    pred_cuts = get_cut(ps)
+    matches = [c for c in get_cut(ts) if c in pred_cuts]
+    return len(matches)
+    
+    
+def get_cut(seq):
+    if len(seq) == 0:
+        return []
+    triplets = []
+    start, last = 0, seq[0]
+    for i, x in enumerate(seq):
+        if x != last:
+            triplets.append((start, i, last))
+            start, last = i, x
+    triplets.append((start, len(seq), last))
+    return triplets   
+    
+    
 def correct_ratio_calculation(samples, model, args, subset_name,
                               input_encoder, output_encoder):
     '''

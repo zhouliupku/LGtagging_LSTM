@@ -17,6 +17,7 @@ BEG_TAG = "<BEG>"
 END_TAG = "<END>"
 
 
+# TODO: use __file__ instead of getcwd()
 OUTPUT_PATH = os.path.join(os.getcwd(), "result")
 REGEX_PATH = os.path.join(os.getcwd(), "models")
 EMBEDDING_PATH = os.path.join(os.getcwd(), "Embedding")

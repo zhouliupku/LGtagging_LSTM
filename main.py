@@ -75,6 +75,7 @@ if __name__ == "__main__":
 
     # Logging
     curr_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    # TODO: put log folder into config
     logging.basicConfig(filename=os.path.join("log", "run{}.log".format(curr_time)),
                         format='%(asctime)s %(message)s',
                         filemode='w')

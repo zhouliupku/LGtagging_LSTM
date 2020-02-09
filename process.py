@@ -59,7 +59,9 @@ def train(logger, args):
     # Step 3. Evaluation with correct ratio
     lg_utils.correct_ratio_calculation(raw_train, model, args, "train", char_encoder, tag_encoder)
     lg_utils.correct_ratio_calculation(raw_cv, model, args, "cv", char_encoder, tag_encoder)
-    
+    if args.task_type == "record":
+        lg_utils.tag_correct_ratio(raw_train, model, "train", char_encoder, tag_encoder)
+        lg_utils.tag_correct_ratio(raw_cv, model, "cv", char_encoder, tag_encoder)
     
 def test(logger, args):
     """
@@ -68,9 +70,11 @@ def test(logger, args):
     raw_test = lg_utils.load_data_from_pickle("{}s_test.p".format(args.task_type),
                                                args.data_size)
     model = ModelFactory().get_trained_model(logger, args)
-    lg_utils.correct_ratio_calculation(raw_test, model, "test", 
+    lg_utils.correct_ratio_calculation(raw_test, model, args, "test", 
                                        model.x_encoder, model.y_encoder)
-    
+    if args.task_type == "record":
+        lg_utils.tag_correct_ratio(raw_test, model, "test", 
+                                       model.x_encoder, model.y_encoder)
     
 def produce(logger, args):
     """
