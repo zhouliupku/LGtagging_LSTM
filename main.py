@@ -63,6 +63,8 @@ parser.add_argument('--regex', type=str2bool, default=True,
                     help='Whether to use RegEx in producing')
 parser.add_argument('--need_train', type=str2bool, default=True,
                     help='Boolean indicating whether need training model')
+parser.add_argument('--use_cuda', type=str2bool, default=True,
+                    help='Whether use cuda if available')
 args = parser.parse_args()
 
 if __name__ == "__main__":

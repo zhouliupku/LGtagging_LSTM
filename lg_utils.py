@@ -97,12 +97,12 @@ def get_data_from_samples(samples, x_encoder, y_encoder):
 #        
     return [(p.get_x(x_encoder), p.get_y(y_encoder)) for p in samples]
 
-def tag_correct_ratio(samples, model, subset_name, input_encoder, output_encoder):
+def tag_correct_ratio(samples, model, subset_name, input_encoder, output_encoder, args):
     '''
     Return word-level correct ratio only for record model
     '''
     inputs = [s.get_x(input_encoder) for s in samples]
-    tag_pred = model.evaluate_model(inputs, output_encoder)   #list of list of tag
+    tag_pred = model.evaluate_model(inputs, output_encoder, args)   #list of list of tag
     tag_true = [s.get_tag() for s in samples]   #list of list of tag
     assert len(tag_pred) == len(tag_true)
     correct_counts = [word_correct_count(ps, ts) for ps, ts in zip(tag_pred, tag_true)]
@@ -140,7 +140,7 @@ def correct_ratio_calculation(samples, model, args, subset_name,
     Get the predict tags and return the correct ratio
     '''
     inputs = [s.get_x(input_encoder) for s in samples]
-    tag_pred = model.evaluate_model(inputs, output_encoder)   #list of list of tag
+    tag_pred = model.evaluate_model(inputs, output_encoder, args)   #list of list of tag
     tag_true = [s.get_tag() for s in samples]     #list of list of tag
     assert len(tag_pred) == len(tag_true)
     if args.task_type == "page":    #only calculate the EOS tag for page model

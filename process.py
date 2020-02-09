@@ -60,8 +60,8 @@ def train(logger, args):
     lg_utils.correct_ratio_calculation(raw_train, model, args, "train", char_encoder, tag_encoder)
     lg_utils.correct_ratio_calculation(raw_cv, model, args, "cv", char_encoder, tag_encoder)
     if args.task_type == "record":
-        lg_utils.tag_correct_ratio(raw_train, model, "train", char_encoder, tag_encoder)
-        lg_utils.tag_correct_ratio(raw_cv, model, "cv", char_encoder, tag_encoder)
+        lg_utils.tag_correct_ratio(raw_train, model, "train", char_encoder, tag_encoder, args)
+        lg_utils.tag_correct_ratio(raw_cv, model, "cv", char_encoder, tag_encoder, args)
     
 def test(logger, args):
     """
@@ -74,7 +74,7 @@ def test(logger, args):
                                        model.x_encoder, model.y_encoder)
     if args.task_type == "record":
         lg_utils.tag_correct_ratio(raw_test, model, "test", 
-                                       model.x_encoder, model.y_encoder)
+                                       model.x_encoder, model.y_encoder, args)
     
 def produce(logger, args):
     """
