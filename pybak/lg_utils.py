@@ -10,7 +10,7 @@ import re
 import pickle
 import numpy as np
 
-from config import NULL_TAG, PADDING_CHAR, EOS_TAG, EMBEDDING_PATH, EMBEDDING_FILENAME_DICT
+from config import NULL_TAG, PADDING_CHAR, EOS_TAG
 
 def convert_to_orig(s):
     """
@@ -87,62 +87,25 @@ def get_keywords_from_tagged_record(char_samples, tag_name):
     return res
 
 def get_data_from_samples(samples, x_encoder, y_encoder):
-#    for p in samples:
-#        print(len(p.txt))
-#        res = p.get_x(x_encoder)
-#        print(res.shape)
-#        if len(p.txt) + 2 != res.shape[0]:
-#            print(p.txt)
-#            raise RuntimeError
-#        
+    for p in samples:
+        print(len(p.txt))
+        res = p.get_x(x_encoder)
+        print(res.shape)
+        if len(p.txt) + 2 != res.shape[0]:
+            print(p.txt)
+            raise RuntimeError
+        
     return [(p.get_x(x_encoder), p.get_y(y_encoder)) for p in samples]
 
-def tag_correct_ratio(samples, model, subset_name, input_encoder, output_encoder):
-    '''
-    Return word-level correct ratio only for record model
-    '''
-    inputs = [s.get_x(input_encoder) for s in samples]
-    tag_pred = model.evaluate_model(inputs, output_encoder)   #list of list of tag
-    tag_true = [s.get_tag() for s in samples]   #list of list of tag
-    assert len(tag_pred) == len(tag_true)
-    correct_counts = [word_correct_count(ps, ts) for ps, ts in zip(tag_pred, tag_true)]
-    tag_correct_ratio = sum(correct_counts) / float(sum(map(len, tag_true)))
-    print("The tag correct ratio of {} set is {}".format(subset_name, tag_correct_ratio))
-    return tag_correct_ratio
-    
-    
-def word_correct_count(ps, ts):
-    """
-    given two lists of tags, count matched words
-    """
-    pred_cuts = get_cut(ps)
-    matches = [c for c in get_cut(ts) if c in pred_cuts]
-    return len(matches)
-    
-    
-def get_cut(seq):
-    if len(seq) == 0:
-        return []
-    triplets = []
-    start, last = 0, seq[0]
-    for i, x in enumerate(seq):
-        if x != last:
-            triplets.append((start, i, last))
-            start, last = i, x
-    triplets.append((start, len(seq), last))
-    return triplets   
-    
-    
 def correct_ratio_calculation(samples, model, args, subset_name,
                               input_encoder, output_encoder):
     '''
-    Take in samples (pages / records), input_encoder, model, output_encoder 
+    Take in records, input_encoder, model, output_encoder 
     Get the predict tags and return the correct ratio
     '''
     inputs = [s.get_x(input_encoder) for s in samples]
     tag_pred = model.evaluate_model(inputs, output_encoder)   #list of list of tag
     tag_true = [s.get_tag() for s in samples]     #list of list of tag
-    assert len(tag_pred) == len(tag_true)
     if args.task_type == "page":    #only calculate the EOS tag for page model
         upstairs = [sum([p==t for p,t in zip(ps, ts) if t == EOS_TAG]) \
                               for ps, ts in zip(tag_pred, tag_true)]
@@ -150,11 +113,6 @@ def correct_ratio_calculation(samples, model, args, subset_name,
     else:
         upstairs = [sum([p==t for p,t in zip(ps, ts)]) for ps, ts in zip(tag_pred, tag_true)]
         downstairs = [len(r) for r in tag_pred]
-#    for ps, ts in zip(tag_pred, tag_true):
-#        print(ps)
-#        print(ts)
-#        print(sum([p==t for p,t in zip(ps, ts) if t == EOS_TAG]))
-#        print(len([r for r in ts if r == EOS_TAG]))
     correct_ratio = sum(upstairs) / float(sum(downstairs))
     print("The correct ratio of {} set is {}".format(subset_name, correct_ratio))
     return correct_ratio
@@ -163,7 +121,3 @@ def correct_ratio_calculation(samples, model, args, subset_name,
 def load_data_from_pickle(filename, size):
     path = os.path.join(os.getcwd(), "data", size)
     return pickle.load(open(os.path.join(path, filename), "rb"))
-
-
-def get_filename_from_embed_type(embed_type):
-    return os.path.join(EMBEDDING_PATH, EMBEDDING_FILENAME_DICT[embed_type])

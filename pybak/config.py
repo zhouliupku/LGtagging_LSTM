@@ -17,13 +17,9 @@ BEG_TAG = "<BEG>"
 END_TAG = "<END>"
 
 
-# TODO: use __file__ instead of getcwd()
 OUTPUT_PATH = os.path.join(os.getcwd(), "result")
 REGEX_PATH = os.path.join(os.getcwd(), "models")
 EMBEDDING_PATH = os.path.join(os.getcwd(), "Embedding")
-EMBEDDING_FILENAME_DICT = {"polyglot": "polyglot-zh_char.pkl",
-                           "MCP": "MCP.p"}
 PLOT_PATH = os.path.join(os.getcwd(), "plot")
 
 BERT_DIM = 768
-MAX_LEN = 512

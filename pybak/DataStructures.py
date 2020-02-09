@@ -38,13 +38,13 @@ class Page(object):
         """
         get y sequence as tensor
         """
-        return encoder.encode(self.get_tag())
+        return encoder.encode([BEG_TAG] + self.get_tag() + [END_TAG])
     
     def get_tag(self):
         tags = [INS_TAG for i in range(len(self.txt))]
         for i in self.eos_idx:
             tags[i] = EOS_TAG
-        return [BEG_TAG] + tags + [END_TAG]
+        return tags
     
     def get_sep_len(self):
         """

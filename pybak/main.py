@@ -25,8 +25,8 @@ def str2bool(v):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--data_size', type=str, default='small',
-                    choices=['small', 'medium', 'full'],
+parser.add_argument('--data_size', type=str, default='tiny',
+                    choices=['tiny', 'small', 'medium', 'full'],
                     help='Size of training data')
 parser.add_argument('--saver_type', type=str, default='html',
                     choices=['html', 'excel'],
@@ -37,12 +37,9 @@ parser.add_argument('--task_type', type=str, default='page',
 parser.add_argument('--model_type', type=str, default='LSTM',
                     choices=['LSTM', 'TwoLayerLSTM', 'LSTMCRF'],
                     help='Type of model')
-parser.add_argument('--main_encoder', type=str, default='BERT',
+parser.add_argument('--input_encoder', type=str, default='BERT',
                     choices=['BERT', 'polyglot'],
-                    help='Type of main input encoder')
-parser.add_argument('--extra_encoder', type=str, default=None,
-                    choices=[None, 'MCP'],
-                    help='Type of extra input encoder')
+                    help='Type of input encoder')
 parser.add_argument('--model_alias', type=str, default='unnamed_model',
                     help='Alias to specify variants of same type of model')
 parser.add_argument('--process_type', type=str, default='train',
@@ -75,7 +72,6 @@ if __name__ == "__main__":
 
     # Logging
     curr_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    # TODO: put log folder into config
     logging.basicConfig(filename=os.path.join("log", "run{}.log".format(curr_time)),
                         format='%(asctime)s %(message)s',
                         filemode='w')

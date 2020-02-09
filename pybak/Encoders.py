@@ -11,7 +11,6 @@ from torch import nn
 from pytorch_pretrained_bert import BertTokenizer, BertModel, BertForMaskedLM
 
 import config
-import lg_utils
 
 
 class Encoder(object):
@@ -38,36 +37,8 @@ class Encoder(object):
     
     
 class XEncoder(Encoder):
-    def __init__(self, args):
-        if args.main_encoder == "BERT":
-            self.main_encoder = BertEncoder()
-        else:
-            self.main_encoder = ErnieEncoder(args.main_encoder)
-        if args.extra_encoder is None:
-            self.extra_encoder = None
-        else:
-            self.extra_encoder = ErnieEncoder(args.extra_encoder)
-        
-    def encode(self, series):
-        main_embed = self.main_encoder.encode(series)
-        if self.extra_encoder is None:
-            return main_embed
-        extra_embed = self.extra_encoder.encode(series)
-        assert main_embed.shape[0] == extra_embed.shape[0]
-        final_embed = torch.cat((main_embed, extra_embed), 1)
-        return final_embed
-    
-    def get_dim(self):
-        if self.extra_encoder is None:
-            return self.main_encoder.get_dim()
-        else:
-            return self.main_encoder.get_dim() + self.extra_encoder.get_dim()
-        
-    
-class ErnieEncoder(Encoder):
-    def __init__(self, embed_type):
-        embedding_filename = lg_utils.get_filename_from_embed_type(embed_type)
-        with open(embedding_filename, 'rb') as infile:
+    def __init__(self, embedding_filename):
+        with open(embedding_filename,'rb') as infile:
             vocab, vectors = pickle.load(infile, encoding='latin1')
         self.embedding_dim = vectors.shape[1]
         self.word_embeddings = nn.Embedding(len(vocab), vectors.shape[1])
@@ -86,7 +57,7 @@ class ErnieEncoder(Encoder):
     
 class BertEncoder(Encoder):
     def __init__(self):
-        self.model = BertModel.from_pretrained('bert-base-chinese')
+        self.model = BertModel.from_pretrained('bert-base-uncased')
         self.model.eval()
         self.tokenizer = BertTokenizer.from_pretrained('bert-base-chinese')
     
@@ -99,16 +70,11 @@ class BertEncoder(Encoder):
                 text[i] = " [CLS] "    #the space is to avoid messy code
             elif x == "</S>":
                 text[i] = " [SEP] "
-            elif ord(x) > 0x9FFF or ord(x) < 0x4e00:
-                text[i] = " [UNK] "
         tokenized_text = self.tokenizer.tokenize(''.join(text))
-#        if len(text) != len(tokenized_text):
-#            print(''.join(text))
-#            print(text)
-#            print(tokenized_text)
-#            raise ValueError
         indexed_tokens = self.tokenizer.convert_tokens_to_ids(tokenized_text)
         segments_ids = [0 for t in tokenized_text]
+        
+        print(tokenized_text)
 
         # convert inputs to PyTorch tensors
         tokens_tensor = torch.tensor([indexed_tokens])

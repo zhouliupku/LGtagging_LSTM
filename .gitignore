@@ -7,3 +7,5 @@ data/
 logart_html/
 log/
 plot/
+.idea/
+sandbox.py
