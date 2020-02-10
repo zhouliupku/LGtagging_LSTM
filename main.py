@@ -37,6 +37,9 @@ parser.add_argument('--task_type', type=str, default='page',
 parser.add_argument('--model_type', type=str, default='LSTM',
                     choices=['LSTM', 'TwoLayerLSTM', 'LSTMCRF'],
                     help='Type of model')
+parser.add_argument('--optimizer', type=str, default='Adam',
+                    choices=['Adam', 'SGD'],        # TODO: add more choices
+                    help='Type of optimizer')
 parser.add_argument('--main_encoder', type=str, default='BERT',
                     choices=['BERT', 'polyglot'],
                     help='Type of main input encoder')
@@ -68,10 +71,8 @@ parser.add_argument('--use_cuda', type=str2bool, default=True,
 args = parser.parse_args()
 
 if __name__ == "__main__":
-    print("\nParameters:")
-    for attr, value in args.__dict__.items():
-        print("\t{} = {}".format(attr.upper(), value))
-
+    # Set random seeds
+    # TODO: make sure in GPU this seed setting is enough
     np.random.seed(0)
     torch.manual_seed(0)
 
@@ -84,6 +85,12 @@ if __name__ == "__main__":
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
     logger.info("Started training at {}".format(curr_time))
+    
+    # Show args
+    print("\nParameters:")
+    for attr, value in args.__dict__.items():
+        print("\t{} = {}".format(attr.upper(), value))
+        logger.info("{} = {}".format(attr.upper(), value))
 
     if args.process_type == "train":
         process.train(logger, args)

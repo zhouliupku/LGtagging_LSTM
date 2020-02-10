@@ -33,13 +33,24 @@ class Tagger(nn.Module):
     def calc_loss(self, tag_scores, targets, loss_func):
         return loss_func(tag_scores, targets)
     
+    def get_optimizer(self, args):
+        if args.optimizer == "SGD":
+            return optim.SGD(self.parameters(),
+                             lr=args.learning_rate)
+        elif args.optimizer == "Adam":
+            return optim.Adam(self.parameters(),
+                              lr=args.learning_rate,
+                              betas=(0.9, 0.999))
+        else:
+            raise ValueError
+    
     def save_model(self, save_path, epoch):
         torch.save(self.state_dict(), os.path.join(save_path, "epoch{}.pt".format(epoch)))
         pickle.dump(self.x_encoder, open(os.path.join(save_path, "x_encoder.p"), "wb"))
         pickle.dump(self.y_encoder, open(os.path.join(save_path, "y_encoder.p"), "wb"))
 
     def train_model(self, training_data, cv_data, args, need_plot=False):
-        optimizer = optim.SGD(self.parameters(), lr=args.learning_rate)
+        optimizer = self.get_optimizer(args)
         if args.loss_type == "NLL":
             loss_function = nn.NLLLoss()
         else:

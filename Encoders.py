@@ -8,7 +8,7 @@ Created on Mon Oct 21 10:48:16 2019
 import torch
 import pickle
 from torch import nn
-from pytorch_pretrained_bert import BertTokenizer, BertModel, BertForMaskedLM
+from pytorch_pretrained_bert import BertTokenizer, BertModel
 
 import config
 import lg_utils
@@ -40,7 +40,7 @@ class Encoder(object):
 class XEncoder(Encoder):
     def __init__(self, args):
         if args.main_encoder == "BERT":
-            self.main_encoder = BertEncoder()
+            self.main_encoder = BertEncoder(args)
         else:
             self.main_encoder = ErnieEncoder(args.main_encoder)
         if args.extra_encoder is None:
@@ -85,7 +85,8 @@ class ErnieEncoder(Encoder):
     
     
 class BertEncoder(Encoder):
-    def __init__(self):
+    def __init__(self, args):
+        self.args = args
         self.model = BertModel.from_pretrained('bert-base-chinese')
         self.model.eval()
         self.tokenizer = BertTokenizer.from_pretrained('bert-base-chinese')
@@ -113,6 +114,11 @@ class BertEncoder(Encoder):
         # convert inputs to PyTorch tensors
         tokens_tensor = torch.tensor([indexed_tokens])
         segments_tensors = torch.tensor([segments_ids])
+        
+        if self.args.use_cuda and torch.cuda.is_available():
+            tokens_tensor = tokens_tensor.to('cuda')
+            segments_tensors = segments_tensors.to('cuda')
+            self.model.to('cuda')
 
         with torch.no_grad():
             encoded_layers, _ = self.model(tokens_tensor, segments_tensors)
