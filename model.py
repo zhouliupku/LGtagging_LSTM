@@ -10,6 +10,7 @@ import pickle
 import torch
 from torch import nn, optim
 from torchcrf import CRF
+from torch.autograd import Variable
 import matplotlib.pyplot as plt
 import datetime
 import math
@@ -32,13 +33,24 @@ class Tagger(nn.Module):
     def calc_loss(self, tag_scores, targets, loss_func):
         return loss_func(tag_scores, targets)
     
+    def get_optimizer(self, args):
+        if args.optimizer == "SGD":
+            return optim.SGD(self.parameters(),
+                             lr=args.learning_rate)
+        elif args.optimizer == "Adam":
+            return optim.Adam(self.parameters(),
+                              lr=args.learning_rate,
+                              betas=(0.9, 0.999))
+        else:
+            raise ValueError
+    
     def save_model(self, save_path, epoch):
         torch.save(self.state_dict(), os.path.join(save_path, "epoch{}.pt".format(epoch)))
         pickle.dump(self.x_encoder, open(os.path.join(save_path, "x_encoder.p"), "wb"))
         pickle.dump(self.y_encoder, open(os.path.join(save_path, "y_encoder.p"), "wb"))
 
     def train_model(self, training_data, cv_data, args, need_plot=False):
-        optimizer = optim.SGD(self.parameters(), lr=args.learning_rate)
+        optimizer = self.get_optimizer(args)
         if args.loss_type == "NLL":
             loss_function = nn.NLLLoss()
         else:
@@ -54,6 +66,9 @@ class Tagger(nn.Module):
             sum_loss_train = 0
             for sentence, targets in training_data:
                 self.zero_grad()   # clear accumulated gradient before each instance
+                if args.use_cuda and torch.cuda.is_available():
+                    sentence = Variable(sentence).cuda()
+                    targets = Variable(targets).cuda()
                 tag_scores = self.forward(sentence)
                 loss = self.calc_loss(tag_scores, targets, loss_function)
                 sum_loss_train += loss.item()
@@ -62,16 +77,22 @@ class Tagger(nn.Module):
             losses_train.append(sum_loss_train / len(training_data))
             self.logger.info("Epoch {}".format(epoch))
             self.logger.info("Training Loss = {}".format(loss.item()))
+            print("Epoch {}".format(epoch))
+            print("Training Loss = {}".format(loss.item()))
 
             # Use CV data to validate
             with torch.no_grad():
                 sum_loss_cv = 0
                 for sentence, targets in cv_data:
+                    if args.use_cuda and torch.cuda.is_available():
+                        sentence = Variable(sentence).cuda()
+                        targets = Variable(targets).cuda()
                     tag_scores = self.forward(sentence)
                     loss = loss_function(tag_scores, targets)
                     sum_loss_cv += loss.item()
                 losses_cv.append(sum_loss_cv / len(cv_data))
             self.logger.info("CV Loss = {}".format(loss.item()))
+            print("CV Loss = {}".format(loss.item()))
                 
             # Save model snapshot
             self.save_model(self.save_path, epoch)
@@ -91,7 +112,7 @@ class Tagger(nn.Module):
         # Save final model
         self.save_model(self.save_path, "_final")
 
-    def evaluate_model(self, test_data, y_encoder):
+    def evaluate_model(self, test_data, y_encoder, args):
         """
         Take model and test data (list of tensors), return list of list of tags
         """
@@ -100,6 +121,8 @@ class Tagger(nn.Module):
             for test_sent in test_data:
                 if len(test_sent) == 0:
                     continue
+                if args.use_cuda and torch.cuda.is_available():
+                    test_sent = Variable(test_sent).cuda()
                 tag_scores = self.forward(test_sent)
                 tag_seq = self.transform(tag_scores)
                 res = y_encoder.decode(tag_seq)
@@ -191,6 +214,8 @@ class ModelFactory(object):
         if args.model_type == "LSTMCRF":
             model = LSTMCRFTagger(logger, args, x_encoder, y_encoder)
         self.setup_saving(model, args)
+        if args.use_cuda and torch.cuda.is_available():
+            model.cuda()
         return model
         
     def get_trained_model(self, logger, args):
@@ -207,7 +232,11 @@ class ModelFactory(object):
         if args.model_type == "LSTMCRF":
             model = LSTMCRFTagger(logger, args, x_encoder, y_encoder)
             
-        model.load_state_dict(torch.load(os.path.join(model_path, "epoch_final.pt")))
+        if not (args.use_cuda and torch.cuda.is_available()):
+            model.load_state_dict(torch.load(os.path.join(model_path, "epoch_final.pt"),
+                                             map_location=torch.device('cpu')))
+        else:
+            model.load_state_dict(torch.load(os.path.join(model_path, "epoch_final.pt")))
         model.eval()
         self.setup_saving(model, args)
         return model

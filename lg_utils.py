@@ -29,6 +29,7 @@ def random_separate(xs, percs):
     bs = [0] + list(bs) + [len(xs)]
     return [[xs[i] for i in index_permuted[beg:end]] for beg, end in zip(bs[:-1], bs[1:])]
 
+
 def modify_tag_seq(text, tag_seq, keyword, tagname):
     """
     Modify tag_seq in the same location of keyword in text by tagname
@@ -86,28 +87,36 @@ def get_keywords_from_tagged_record(char_samples, tag_name):
         res.append(current_keyword)
     return res
 
-def get_data_from_samples(samples, x_encoder, y_encoder):
-#    for p in samples:
-#        print(len(p.txt))
-#        res = p.get_x(x_encoder)
-#        print(res.shape)
-#        if len(p.txt) + 2 != res.shape[0]:
-#            print(p.txt)
-#            raise RuntimeError
-#        
-    return [(p.get_x(x_encoder), p.get_y(y_encoder)) for p in samples]
 
-def tag_correct_ratio(samples, model, subset_name, input_encoder, output_encoder):
+def get_data_from_samples(samples, x_encoder, y_encoder):
+    retv = []
+    for i, p in enumerate(samples):
+        if i % 1000 == 0:
+            print(i)
+        retv.append((p.get_x(x_encoder), p.get_y(y_encoder)))
+    return retv
+        
+#    return [(p.get_x(x_encoder), p.get_y(y_encoder)) for p in samples]
+
+
+def tag_correct_ratio(samples, model, subset_name, 
+                      input_encoder, output_encoder, args, logger):
     '''
-    Return word-level correct ratio only for record model
+    Return entity-level correct ratio only for record model
     '''
     inputs = [s.get_x(input_encoder) for s in samples]
-    tag_pred = model.evaluate_model(inputs, output_encoder)   #list of list of tag
-    tag_true = [s.get_tag() for s in samples]   #list of list of tag
+    tag_pred = model.evaluate_model(inputs, output_encoder, args)   # list of list of tag
+    tag_true = [s.get_tag() for s in samples]   # list of list of tag
     assert len(tag_pred) == len(tag_true)
     correct_counts = [word_correct_count(ps, ts) for ps, ts in zip(tag_pred, tag_true)]
-    tag_correct_ratio = sum(correct_counts) / float(sum(map(len, tag_true)))
-    print("The tag correct ratio of {} set is {}".format(subset_name, tag_correct_ratio))
+    entity_correct_ratio = sum(correct_counts) / float(sum(map(len, tag_true)))
+    
+    # Log info of correct ratio
+    info_log = "Entity level correct ratio of {} set is {}".format(subset_name,
+                                                              entity_correct_ratio)
+    print(info_log)
+    logger.info(info_log)
+    
     return tag_correct_ratio
     
     
@@ -134,29 +143,29 @@ def get_cut(seq):
     
     
 def correct_ratio_calculation(samples, model, args, subset_name,
-                              input_encoder, output_encoder):
+                              input_encoder, output_encoder, logger):
     '''
     Take in samples (pages / records), input_encoder, model, output_encoder 
     Get the predict tags and return the correct ratio
     '''
     inputs = [s.get_x(input_encoder) for s in samples]
-    tag_pred = model.evaluate_model(inputs, output_encoder)   #list of list of tag
-    tag_true = [s.get_tag() for s in samples]     #list of list of tag
+    tag_pred = model.evaluate_model(inputs, output_encoder, args)   # list of list of tag
+    tag_true = [s.get_tag() for s in samples]     # list of list of tag
     assert len(tag_pred) == len(tag_true)
-    if args.task_type == "page":    #only calculate the EOS tag for page model
+    if args.task_type == "page":    # only calculate the EOS tag for page model
         upstairs = [sum([p==t for p,t in zip(ps, ts) if t == EOS_TAG]) \
                               for ps, ts in zip(tag_pred, tag_true)]
         downstairs = [len([r for r in rs if r == EOS_TAG]) for rs in tag_true]
     else:
         upstairs = [sum([p==t for p,t in zip(ps, ts)]) for ps, ts in zip(tag_pred, tag_true)]
         downstairs = [len(r) for r in tag_pred]
-#    for ps, ts in zip(tag_pred, tag_true):
-#        print(ps)
-#        print(ts)
-#        print(sum([p==t for p,t in zip(ps, ts) if t == EOS_TAG]))
-#        print(len([r for r in ts if r == EOS_TAG]))
     correct_ratio = sum(upstairs) / float(sum(downstairs))
-    print("The correct ratio of {} set is {}".format(subset_name, correct_ratio))
+    
+    # Log info of correct ratio
+    info_log = "Correct ratio of {} set is {}".format(subset_name, correct_ratio)
+    print(info_log)
+    logger.info(info_log)
+    
     return correct_ratio
 
 

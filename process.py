@@ -26,6 +26,8 @@ def train(logger, args):
                                                args.data_size)
     raw_cv = lg_utils.load_data_from_pickle("{}s_cv.p".format(args.task_type),
                                                args.data_size)
+    print("Loading done")
+    logger.info("Loading done")
     
     # Set up encoders
     char_encoder = XEncoder(args)
@@ -49,6 +51,8 @@ def train(logger, args):
     # Step 1. Data preparation
     training_data = lg_utils.get_data_from_samples(raw_train, char_encoder, tag_encoder)
     cv_data = lg_utils.get_data_from_samples(raw_cv, char_encoder, tag_encoder)
+    print("Encoding done")
+    logger.info("Encoding done")
     
     # Step 2. Model training
     if args.need_train:
@@ -57,11 +61,11 @@ def train(logger, args):
         model = ModelFactory().get_trained_model(logger, args)
         
     # Step 3. Evaluation with correct ratio
-    lg_utils.correct_ratio_calculation(raw_train, model, args, "train", char_encoder, tag_encoder)
-    lg_utils.correct_ratio_calculation(raw_cv, model, args, "cv", char_encoder, tag_encoder)
+    lg_utils.correct_ratio_calculation(raw_train, model, args, "train", char_encoder, tag_encoder, logger)
+    lg_utils.correct_ratio_calculation(raw_cv, model, args, "cv", char_encoder, tag_encoder, logger)
     if args.task_type == "record":
-        lg_utils.tag_correct_ratio(raw_train, model, "train", char_encoder, tag_encoder)
-        lg_utils.tag_correct_ratio(raw_cv, model, "cv", char_encoder, tag_encoder)
+        lg_utils.tag_correct_ratio(raw_train, model, "train", char_encoder, tag_encoder, args, logger)
+        lg_utils.tag_correct_ratio(raw_cv, model, "cv", char_encoder, tag_encoder, args, logger)
     
 def test(logger, args):
     """
@@ -71,10 +75,10 @@ def test(logger, args):
                                                args.data_size)
     model = ModelFactory().get_trained_model(logger, args)
     lg_utils.correct_ratio_calculation(raw_test, model, args, "test", 
-                                       model.x_encoder, model.y_encoder)
+                                       model.x_encoder, model.y_encoder, logger)
     if args.task_type == "record":
         lg_utils.tag_correct_ratio(raw_test, model, "test", 
-                                       model.x_encoder, model.y_encoder)
+                                   model.x_encoder, model.y_encoder, args, logger)
     
 def produce(logger, args):
     """
