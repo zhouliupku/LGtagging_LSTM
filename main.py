@@ -56,6 +56,8 @@ parser.add_argument('--loss_type', type=str, default='NLL',
                     help='Type of loss function')
 parser.add_argument('--n_epoch', type=int, default=50,
                     help='Number of epoch')
+parser.add_argument('--batch_size', type=int, default=4,
+                    help='Batch size')
 parser.add_argument('--learning_rate', type=float, default=0.05,
                     help='Learning rate')
 parser.add_argument('--hidden_dim', type=int, default=6,

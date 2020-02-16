@@ -9,12 +9,14 @@ import os
 import re
 import datetime
 import itertools
+import torch
 
 import lg_utils
 import config
 from Encoders import XEncoder, YEncoder, BertEncoder
 from data_save import ExcelSaver, HtmlSaver
 from model import ModelFactory
+from DataStructures import LogartData
 
 
 def train(logger, args):
@@ -49,8 +51,8 @@ def train(logger, args):
     
     # Training
     # Step 1. Data preparation
-    training_data = lg_utils.get_data_from_samples(raw_train, char_encoder, tag_encoder)
-    cv_data = lg_utils.get_data_from_samples(raw_cv, char_encoder, tag_encoder)
+    training_data = LogartData(raw_train, char_encoder, tag_encoder)
+    cv_data = LogartData(raw_cv, char_encoder, tag_encoder)
     print("Encoding done")
     logger.info("Encoding done")
     

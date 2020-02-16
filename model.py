@@ -8,12 +8,15 @@ Created on Mon Oct 21 17:45:36 2019
 import os
 import pickle
 import torch
+import numpy as np
 from torch import nn, optim
 from torchcrf import CRF
 from torch.autograd import Variable
+import torch.nn.utils.rnn as rnn_utils
 import matplotlib.pyplot as plt
 import datetime
 import math
+from tqdm import tqdm
 
 import config
 
@@ -43,6 +46,11 @@ class Tagger(nn.Module):
                               betas=(0.9, 0.999))
         else:
             raise ValueError
+            
+    def collate(data):
+        data.sort(key=lambda sample: sample['x'].shape[0], reverse=True)
+        data = rnn_utils.pad_sequence(data, batch_first=True, padding_value=0)
+        return data
     
     def save_model(self, save_path, epoch):
         torch.save(self.state_dict(), os.path.join(save_path, "epoch{}.pt".format(epoch)))
@@ -50,6 +58,10 @@ class Tagger(nn.Module):
         pickle.dump(self.y_encoder, open(os.path.join(save_path, "y_encoder.p"), "wb"))
 
     def train_model(self, training_data, cv_data, args, need_plot=False):
+        data_loader = torch.utils.data.DataLoader(training_data,
+                                                  batch_size=args.batch_size,
+                                                  shuffle=True,
+                                                  collate_fn=self.collate)
         optimizer = self.get_optimizer(args)
         if args.loss_type == "NLL":
             loss_function = nn.NLLLoss()
@@ -61,20 +73,31 @@ class Tagger(nn.Module):
         if need_plot:
             plt.figure(figsize=[20, 10])
         
+        # TODO: shouxie data_loader, depending on batch_size, sort and build iterator
+        
+        # TODO: pad each batch depending on the longest sentence of this batch
+        
+        # TODO: use whatever encoder to encode the padded batch, before the for loop
+        
+        
+        
+        
         for epoch in range(args.n_epoch):
-            # Use training data to train
-            sum_loss_train = 0
-            for sentence, targets in training_data:
+            losses_epoch = []
+            for batch in tqdm(data_loader):
+                sentences, targets = batch['x'], batch['y']
                 self.zero_grad()   # clear accumulated gradient before each instance
                 if args.use_cuda and torch.cuda.is_available():
-                    sentence = Variable(sentence).cuda()
+                    sentences = Variable(sentences).cuda()
                     targets = Variable(targets).cuda()
-                tag_scores = self.forward(sentence)
+                tag_scores = self.forward(sentences)
+                # TODO: rewrite forward() with input tensor dim = (batch_size, sent_len, embed_dim)
                 loss = self.calc_loss(tag_scores, targets, loss_function)
-                sum_loss_train += loss.item()
+                # TODO: loss function with ignorance of PAD, BEG, END
                 loss.backward(retain_graph=True)
                 optimizer.step()
-            losses_train.append(sum_loss_train / len(training_data))
+                losses_epoch.append(loss.item())
+            losses_train.append(np.mean(losses_epoch))
             self.logger.info("Epoch {}".format(epoch))
             self.logger.info("Training Loss = {}".format(loss.item()))
             print("Epoch {}".format(epoch))

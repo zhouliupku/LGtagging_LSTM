@@ -5,8 +5,28 @@ Created on Sun Oct 20 15:55:30 2019
 @author: Zhou
 """
 
+import torch
+
 import lg_utils
 from config import INS_TAG, EOS_TAG, BEG_TAG, END_TAG
+
+
+class LogartData(torch.utils.data.Dataset):
+    def __init__(self, raw_data, x_encoder, y_encoder):
+        self.samples = []
+        for i, p in enumerate(raw_data):
+            if i % 1000 == 0:
+                print(i)
+            self.samples.append({'x': p.get_x(x_encoder),
+                                 'y': p.get_y(y_encoder)})
+        # TODO: check if we need store index
+    
+    def __len__(self):
+        return len(self.samples)
+    
+    def __getitem__(self, index):
+        return self.samples[index]
+
 
 class Page(object):
     def __init__(self, pid, txt, eos_idx):
@@ -119,4 +139,3 @@ class CharSample(object):
     
     def set_tag(self, tag):
         self.tag = tag
-
