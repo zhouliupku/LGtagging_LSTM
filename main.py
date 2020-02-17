@@ -38,7 +38,7 @@ parser.add_argument('--model_type', type=str, default='LSTM',
                     choices=['LSTM', 'TwoLayerLSTM', 'LSTMCRF'],
                     help='Type of model')
 parser.add_argument('--optimizer', type=str, default='Adam',
-                    choices=['Adam', 'SGD'],        # TODO: add more choices
+                    choices=['Adam', 'SGD'],        # TODO: add more choices, check if SGD still usable
                     help='Type of optimizer')
 parser.add_argument('--main_encoder', type=str, default='BERT',
                     choices=['BERT', 'polyglot'],
@@ -51,9 +51,6 @@ parser.add_argument('--model_alias', type=str, default='unnamed_model',
 parser.add_argument('--process_type', type=str, default='train',
                     choices=['train', 'test', 'produce'],
                     help='Type of process')
-parser.add_argument('--loss_type', type=str, default='NLL',
-                    choices=['NLL'],
-                    help='Type of loss function')
 parser.add_argument('--n_epoch', type=int, default=50,
                     help='Number of epoch')
 parser.add_argument('--batch_size', type=int, default=4,
@@ -74,13 +71,11 @@ args = parser.parse_args()
 
 if __name__ == "__main__":
     # Set random seeds
-    # TODO: make sure in GPU this seed setting is enough
     np.random.seed(0)
     torch.manual_seed(0)
 
     # Logging
     curr_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    # TODO: put log folder into config
     logging.basicConfig(filename=os.path.join("log", "run{}.log".format(curr_time)),
                         format='%(asctime)s %(message)s',
                         filemode='w')

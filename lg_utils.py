@@ -10,13 +10,13 @@ import re
 import pickle
 import numpy as np
 
-from config import NULL_TAG, PADDING_CHAR, EOS_TAG, EMBEDDING_PATH, EMBEDDING_FILENAME_DICT
+import config
 
 def convert_to_orig(s):
     """
     Convert string from database to corresponding original text
     """
-    return s.replace(' ', PADDING_CHAR)
+    return s.replace(' ', config.PADDING_CHAR)
 
 
 def random_separate(xs, percs):
@@ -42,7 +42,7 @@ def modify_tag_seq(text, tag_seq, keyword, tagname):
     begin_locs = [loc.start() for loc in re.finditer(keyword, text)]
     for begin_loc in begin_locs:
         for loc in range(begin_loc, begin_loc + len(keyword)):
-            if tag_seq[loc] != NULL_TAG:
+            if tag_seq[loc] != config.NULL_TAG:
                 raise ValueError("Same char cannot bear more than one tag!")
             tag_seq[loc] = tagname
     
@@ -99,14 +99,13 @@ def get_data_from_samples(samples, x_encoder, y_encoder):
 #    return [(p.get_x(x_encoder), p.get_y(y_encoder)) for p in samples]
 
 
-def tag_correct_ratio(samples, model, subset_name, 
-                      input_encoder, output_encoder, args, logger):
+def tag_correct_ratio(samples, model, subset_name, args, logger):
     '''
     Return entity-level correct ratio only for record model
     '''
-    inputs = [s.get_x(input_encoder) for s in samples]
-    tag_pred = model.evaluate_model(inputs, output_encoder, args)   # list of list of tag
-    tag_true = [s.get_tag() for s in samples]   # list of list of tag
+    inputs = [s.get_x() for s in samples]
+    tag_pred = model.evaluate_model(inputs, args)   # list of list of tag
+    tag_true = [s.get_y() for s in samples]   # list of list of tag
     assert len(tag_pred) == len(tag_true)
     correct_counts = [word_correct_count(ps, ts) for ps, ts in zip(tag_pred, tag_true)]
     entity_correct_ratio = sum(correct_counts) / float(sum(map(len, tag_true)))
@@ -130,6 +129,7 @@ def word_correct_count(ps, ts):
     
     
 def get_cut(seq):
+    # TODO: handle BEG, END
     if len(seq) == 0:
         return []
     triplets = []
@@ -142,23 +142,24 @@ def get_cut(seq):
     return triplets   
     
     
-def correct_ratio_calculation(samples, model, args, subset_name,
-                              input_encoder, output_encoder, logger):
+def correct_ratio_calculation(samples, model, args, subset_name, logger):
     '''
     Take in samples (pages / records), input_encoder, model, output_encoder 
     Get the predict tags and return the correct ratio
     '''
-    inputs = [s.get_x(input_encoder) for s in samples]
-    tag_pred = model.evaluate_model(inputs, output_encoder, args)   # list of list of tag
-    tag_true = [s.get_tag() for s in samples]     # list of list of tag
+    inputs = [s.get_x() for s in samples]
+    tag_pred = model.evaluate_model(inputs, args)   # list of list of tag
+    tag_true = [s.get_y() for s in samples]     # list of list of tag
     assert len(tag_pred) == len(tag_true)
     if args.task_type == "page":    # only calculate the EOS tag for page model
-        upstairs = [sum([p==t for p,t in zip(ps, ts) if t == EOS_TAG]) \
+        upstairs = [sum([p==t for p,t in zip(ps, ts) if t == config.EOS_TAG]) \
                               for ps, ts in zip(tag_pred, tag_true)]
-        downstairs = [len([r for r in rs if r == EOS_TAG]) for rs in tag_true]
-    else:
-        upstairs = [sum([p==t for p,t in zip(ps, ts)]) for ps, ts in zip(tag_pred, tag_true)]
-        downstairs = [len(r) for r in tag_pred]
+        downstairs = [len([r for r in rs if r == config.EOS_TAG]) for rs in tag_true]
+    else:       # ignore BEG, END etc for record model, although they are learned
+        upstairs = [sum([p==t for p,t in zip(ps, ts) if t not in config.special_tag_list]) \
+                    for ps, ts in zip(tag_pred, tag_true)]
+        downstairs = [len(r) for r in tag_pred if r not in config.special_tag_list]
+    # There should be no empty page/record so no check for divide-by-zero needed here
     correct_ratio = sum(upstairs) / float(sum(downstairs))
     
     # Log info of correct ratio
@@ -175,4 +176,5 @@ def load_data_from_pickle(filename, size):
 
 
 def get_filename_from_embed_type(embed_type):
-    return os.path.join(EMBEDDING_PATH, EMBEDDING_FILENAME_DICT[embed_type])
+    return os.path.join(config.EMBEDDING_PATH,
+                        config.EMBEDDING_FILENAME_DICT[embed_type])

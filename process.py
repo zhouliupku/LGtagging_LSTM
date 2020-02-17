@@ -9,14 +9,12 @@ import os
 import re
 import datetime
 import itertools
-import torch
 
 import lg_utils
 import config
-from Encoders import XEncoder, YEncoder, BertEncoder
+from Encoders import XEncoder, YEncoder
 from data_save import ExcelSaver, HtmlSaver
 from model import ModelFactory
-from DataStructures import LogartData
 
 
 def train(logger, args):
@@ -33,12 +31,10 @@ def train(logger, args):
     
     # Set up encoders
     char_encoder = XEncoder(args)
-#    vars(args)['embedding_dim'] = char_encoder.embedding_dim
     if args.task_type == "page":
-        tag_encoder = YEncoder([config.INS_TAG, config.EOS_TAG, config.BEG_TAG, config.END_TAG])        # TODO: add <BEG>, <END>
+        tag_encoder = YEncoder([config.INS_TAG, config.EOS_TAG])
     else:
-        tagset = set(itertools.chain.from_iterable([r.orig_tags for r in raw_train]))
-        tagset = [config.BEG_TAG, config.END_TAG] + sorted(list(tagset))      # TODO: put into config and use config 
+        tagset = sorted(list(set(itertools.chain.from_iterable([r.orig_tags for r in raw_train])))) 
         tag_encoder = YEncoder(tagset)
         
     # Set up model
@@ -51,10 +47,8 @@ def train(logger, args):
     
     # Training
     # Step 1. Data preparation
-    training_data = LogartData(raw_train, char_encoder, tag_encoder)
-    cv_data = LogartData(raw_cv, char_encoder, tag_encoder)
-    print("Encoding done")
-    logger.info("Encoding done")
+    training_data = [(p.get_x(), p.get_y()) for p in raw_train]
+    cv_data = [(p.get_x(), p.get_y()) for p in raw_cv]
     
     # Step 2. Model training
     if args.need_train:
@@ -63,11 +57,11 @@ def train(logger, args):
         model = ModelFactory().get_trained_model(logger, args)
         
     # Step 3. Evaluation with correct ratio
-    lg_utils.correct_ratio_calculation(raw_train, model, args, "train", char_encoder, tag_encoder, logger)
-    lg_utils.correct_ratio_calculation(raw_cv, model, args, "cv", char_encoder, tag_encoder, logger)
+    lg_utils.correct_ratio_calculation(raw_train, model, args, "train", logger)
+    lg_utils.correct_ratio_calculation(raw_cv, model, args, "cv", logger)
     if args.task_type == "record":
-        lg_utils.tag_correct_ratio(raw_train, model, "train", char_encoder, tag_encoder, args, logger)
-        lg_utils.tag_correct_ratio(raw_cv, model, "cv", char_encoder, tag_encoder, args, logger)
+        lg_utils.tag_correct_ratio(raw_train, model, "train", args, logger)
+        lg_utils.tag_correct_ratio(raw_cv, model, "cv", args, logger)
     
 def test(logger, args):
     """

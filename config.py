@@ -7,23 +7,32 @@ Created on Tue Nov 12 22:56:23 2019
 
 import os
 
-
+# For pre-processing
 NULL_TAG = "null"
-
 PADDING_CHAR = '○'
+
+# For x encoders
+BEG_CHAR = "<S>"
+END_CHAR = "</S>"
+PAD_CHAR = "PAD"
+UNK_CHAR = "<UNK>"
+special_char_list = [BEG_CHAR, END_CHAR, PAD_CHAR, UNK_CHAR]
+
+# For y encoders
 INS_TAG = 'N'
 EOS_TAG = 'S'
 BEG_TAG = "<BEG>"
 END_TAG = "<END>"
+PAD_TAG = "<PAD>"
+special_tag_list = [BEG_TAG, END_TAG, PAD_TAG]
 
-
-# TODO: use __file__ instead of getcwd()
-OUTPUT_PATH = os.path.join(os.getcwd(), "result")
-REGEX_PATH = os.path.join(os.getcwd(), "models")
-EMBEDDING_PATH = os.path.join(os.getcwd(), "Embedding")
+ROOT_PATH = os.path.dirname(__file__)
+OUTPUT_PATH = os.path.join(ROOT_PATH, "result")
+REGEX_PATH = os.path.join(ROOT_PATH, "models")
+EMBEDDING_PATH = os.path.join(ROOT_PATH, "Embedding")
 EMBEDDING_FILENAME_DICT = {"polyglot": "polyglot-zh_char.pkl",
                            "MCP": "MCP.p"}
-PLOT_PATH = os.path.join(os.getcwd(), "plot")
+PLOT_PATH = os.path.join(ROOT_PATH, "plot")
 
 BERT_DIM = 768
 MAX_LEN = 512

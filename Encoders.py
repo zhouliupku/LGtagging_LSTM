@@ -96,18 +96,15 @@ class BertEncoder(Encoder):
             raise TypeError
         text = series[::]
         for i, x in enumerate(text):
-            if x == "<S>":         #<S>,</S> for polyglot
+            if x == config.BEG_CHAR:         #<S>,</S> for polyglot
                 text[i] = " [CLS] "    #the space is to avoid messy code
-            elif x == "</S>":
+            elif x == config.END_CHAR:
                 text[i] = " [SEP] "
+            elif x == config.PAD_CHAR:
+                text[i] = " [PAD] "
             elif ord(x) > 0x9FFF or ord(x) < 0x4e00:
                 text[i] = " [UNK] "
         tokenized_text = self.tokenizer.tokenize(''.join(text))
-#        if len(text) != len(tokenized_text):
-#            print(''.join(text))
-#            print(text)
-#            print(tokenized_text)
-#            raise ValueError
         indexed_tokens = self.tokenizer.convert_tokens_to_ids(tokenized_text)
         segments_ids = [0 for t in tokenized_text]
 
@@ -131,22 +128,39 @@ class BertEncoder(Encoder):
         
 
 class YEncoder(Encoder):
+    """
+    Each Y encoder must support BEG, END, PAD
+    """
     def __init__(self, tag_list):
-        self.tag_dict = dict()      # int -> tag
-        self.tag_index_dict = dict()       # tag -> int
-        for x,y in enumerate(tag_list):
+        self.tag_dict = dict()      # tag -> int
+        self.tag_index_dict = dict()       # int -> tag
+        self.num_normal_tag = len(tag_list)
+        for x, y in enumerate(tag_list):
             self.tag_dict[y] = x
             self.tag_index_dict[x] = y
-    
-    def get_tag_dim(self):
-        return len(self.tag_dict)
+        # Here we cannot use list because those -1, -2 etc need to be kept as
+        # negative to indicate that they are not normal tags and should be
+        # skipped when calculate loss and correct ratios etc.
+        self.tag_index_dict[self.num_normal_tag] = config.BEG_TAG
+        self.tag_index_dict[self.num_normal_tag+1] = config.END_TAG
+        self.tag_index_dict[self.num_normal_tag+2] = config.PAD_TAG
+        self.tag_dict[config.BEG_TAG] = self.num_normal_tag
+        self.tag_dict[config.END_TAG] = self.num_normal_tag+1
+        self.tag_dict[config.PAD_TAG] = self.num_normal_tag+2
+        self.num_tag = len(self.tag_dict)
     
     def encode(self, series):
         return torch.tensor([self.tag_dict[w] for w in series], dtype=torch.long)
     
     def decode(self, res_tensor):
-        return [self.tag_index_dict[t.item()] for t in res_tensor]
+        return [self.int_to_tag(t.item()) for t in res_tensor]
     
     def get_dim(self):
-        return self.get_tag_dim()       # TODO: unify
+        return self.num_tag
+    
+    def get_num_unmask_tag(self):
+        return self.num_normal_tag + 2   # normal tag and BEG, END should not be masked
+    
+    def int_to_tag(self, idx_int):
+        return self.tag_index_dict[idx_int]
     
