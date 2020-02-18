@@ -169,20 +169,24 @@ class Tagger(nn.Module):
 
     def evaluate_model(self, test_data, args):
         """
-        Take model and test data (list of list of str), return list of list of tags
+        Take model and test data (list of (list of str, list of tag_true)),
+        return list of (list of tag_pred, list of tag_true)
         """
         result_list = []
-        batches = self.make_padded_batch(test_data, 1, contain_tag=False)
+        batches = self.make_padded_batch(test_data, 1, contain_tag=True)
         with torch.no_grad():
-            for test_sent in batches:
+            for test_sent, tags_true_encoded in batches:
                 if len(test_sent) == 0:
                     continue
                 if args.use_cuda and torch.cuda.is_available():
                     test_sent = test_sent.cuda()
                 tag_scores = self.forward(test_sent)
                 tag_seq = self.transform(tag_scores)
-                res = self.y_encoder.decode(tag_seq)
-                result_list.append(res)
+                tags_pred = self.y_encoder.decode(tag_seq)
+                # tags_true_encoded was 1 x sent_len, need to flatten it
+                tags_true_encoded = tags_true_encoded.view(-1) 
+                tags_true= self.y_encoder.decode(tags_true_encoded)
+                result_list.append((tags_pred, tags_true))
             return result_list
         
     def transform(self, tag_scores):

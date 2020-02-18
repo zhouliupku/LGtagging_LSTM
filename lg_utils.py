@@ -103,10 +103,13 @@ def tag_correct_ratio(samples, model, subset_name, args, logger):
     '''
     Return entity-level correct ratio only for record model
     '''
-    inputs = [s.get_x() for s in samples]
-    tag_pred = model.evaluate_model(inputs, args)   # list of list of tag
-    tag_true = [s.get_y() for s in samples]   # list of list of tag
+    inputs = [(s.get_x(), s.get_y()) for s in samples]
+    tags = model.evaluate_model(inputs, args)  
+    tag_pred = [tag[0] for tag in tags]
+    tag_true = [tag[1] for tag in tags]
     assert len(tag_pred) == len(tag_true)
+    for x, y in zip(tag_pred, tag_true):
+        assert len(x) == len(y)
     correct_and_total_counts = [word_count(ps, ts) for ps, ts in zip(tag_pred, tag_true)]
     entity_correct_ratio = sum([x[0] for x in correct_and_total_counts]) \
                             / float(sum([x[1] for x in correct_and_total_counts]))
@@ -148,10 +151,13 @@ def correct_ratio_calculation(samples, model, args, subset_name, logger):
     Take in samples (pages / records), input_encoder, model, output_encoder 
     Get the predict tags and return the correct ratio
     '''
-    inputs = [s.get_x() for s in samples]
-    tag_pred = model.evaluate_model(inputs, args)   # list of list of tag
-    tag_true = [s.get_y() for s in samples]     # list of list of tag
+    inputs = [(s.get_x(), s.get_y()) for s in samples]
+    tags = model.evaluate_model(inputs, args)   # list of (list of tagp, list of tagt)
+    tag_pred = [tag[0] for tag in tags]
+    tag_true = [tag[1] for tag in tags]
     assert len(tag_pred) == len(tag_true)
+    for x, y in zip(tag_pred, tag_true):
+        assert len(x) == len(y)
     if args.task_type == "page":    # only calculate the EOS tag for page model
         upstairs = [sum([p==t for p,t in zip(ps, ts) if t == config.EOS_TAG]) \
                               for ps, ts in zip(tag_pred, tag_true)]
