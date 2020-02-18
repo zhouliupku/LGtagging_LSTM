@@ -107,8 +107,9 @@ def tag_correct_ratio(samples, model, subset_name, args, logger):
     tag_pred = model.evaluate_model(inputs, args)   # list of list of tag
     tag_true = [s.get_y() for s in samples]   # list of list of tag
     assert len(tag_pred) == len(tag_true)
-    correct_counts = [word_correct_count(ps, ts) for ps, ts in zip(tag_pred, tag_true)]
-    entity_correct_ratio = sum(correct_counts) / float(sum(map(len, tag_true)))
+    correct_and_total_counts = [word_count(ps, ts) for ps, ts in zip(tag_pred, tag_true)]
+    entity_correct_ratio = sum([x[0] for x in correct_and_total_counts]) \
+                            / float(sum([x[1] for x in correct_and_total_counts]))
     
     # Log info of correct ratio
     info_log = "Entity level correct ratio of {} set is {}".format(subset_name,
@@ -119,17 +120,17 @@ def tag_correct_ratio(samples, model, subset_name, args, logger):
     return tag_correct_ratio
     
     
-def word_correct_count(ps, ts):
+def word_count(ps, ts):
     """
     given two lists of tags, count matched words
     """
     pred_cuts = get_cut(ps)
     matches = [c for c in get_cut(ts) if c in pred_cuts]
-    return len(matches)
+    return len(matches), len(pred_cuts)
     
     
 def get_cut(seq):
-    # TODO: handle BEG, END
+    # TODO: see if other papers handle BEG, END, null tag
     if len(seq) == 0:
         return []
     triplets = []
@@ -158,7 +159,7 @@ def correct_ratio_calculation(samples, model, args, subset_name, logger):
     else:       # ignore BEG, END etc for record model, although they are learned
         upstairs = [sum([p==t for p,t in zip(ps, ts) if t not in config.special_tag_list]) \
                     for ps, ts in zip(tag_pred, tag_true)]
-        downstairs = [len(r) for r in tag_pred if r not in config.special_tag_list]
+        downstairs = [len(r) for r in tag_true if r not in config.special_tag_list]
     # There should be no empty page/record so no check for divide-by-zero needed here
     correct_ratio = sum(upstairs) / float(sum(downstairs))
     

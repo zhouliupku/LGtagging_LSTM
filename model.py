@@ -47,6 +47,8 @@ class Tagger(nn.Module):
         #cross entropy loss for all non 'PAD' tokens
         return -torch.sum(outputs)/num_tokens
     
+    
+   
     def get_optimizer(self, args):
         if args.optimizer == "SGD":
             return optim.SGD(self.parameters(),
@@ -124,6 +126,7 @@ class Tagger(nn.Module):
                 optimizer.step()
                 losses_epoch.append(loss.item())
             losses_train.append(np.mean(losses_epoch))
+        
             self.logger.info("Epoch {}".format(epoch))
             self.logger.info("Training Loss = {}".format(np.mean(losses_epoch)))
             print("Epoch {}".format(epoch))
@@ -160,6 +163,9 @@ class Tagger(nn.Module):
         
         # Save final model
         self.save_model(self.save_path, "_final")
+        
+        
+    
 
     def evaluate_model(self, test_data, args):
         """
