@@ -174,6 +174,7 @@ class Tagger(nn.Module):
         """
         result_list = []
         batches = self.make_padded_batch(test_data, 1, contain_tag=True)
+        
         with torch.no_grad():
             for test_sent, tags_true_encoded in batches:
                 if len(test_sent) == 0:
@@ -327,7 +328,9 @@ class ModelFactory(object):
             model.load_state_dict(torch.load(os.path.join(model_path, "epoch_final.pt"),
                                              map_location=torch.device('cpu')))
         else:
-            model.load_state_dict(torch.load(os.path.join(model_path, "epoch_final.pt")))
+            model.load_state_dict(torch.load(os.path.join(model_path, "epoch_final.pt"),
+                                             map_location=torch.device('cuda:0')))
+            model.cuda()
         model.eval()
         self.setup_saving(model, args)
         return model

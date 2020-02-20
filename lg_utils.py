@@ -151,8 +151,8 @@ def correct_ratio_calculation(samples, model, args, subset_name, logger):
     Take in samples (pages / records), input_encoder, model, output_encoder 
     Get the predict tags and return the correct ratio
     '''
-    inputs = [(s.get_x(), s.get_y()) for s in samples]
-    tags = model.evaluate_model(inputs, args)   # list of (list of tagp, list of tagt)
+    inputs = [(s.get_x(), s.get_y()) for s in samples]    
+    tags = model.evaluate_model(inputs, args)   # list of (list of tags, list of tags)
     tag_pred = [tag[0] for tag in tags]
     tag_true = [tag[1] for tag in tags]
     assert len(tag_pred) == len(tag_true)
@@ -178,7 +178,7 @@ def correct_ratio_calculation(samples, model, args, subset_name, logger):
 
 
 def load_data_from_pickle(filename, size):
-    path = os.path.join(os.getcwd(), "data", size)
+    path = os.path.join(config.DATA_PATH, size)
     return pickle.load(open(os.path.join(path, filename), "rb"))
 
 

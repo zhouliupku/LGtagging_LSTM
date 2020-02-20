@@ -29,6 +29,7 @@ special_tag_list = [BEG_TAG, END_TAG, PAD_TAG]
 ROOT_PATH = os.path.dirname(__file__)
 OUTPUT_PATH = os.path.join(ROOT_PATH, "result")
 REGEX_PATH = os.path.join(ROOT_PATH, "models")
+DATA_PATH = os.path.join(ROOT_PATH, "data")
 EMBEDDING_PATH = os.path.join(ROOT_PATH, "Embedding")
 EMBEDDING_FILENAME_DICT = {"polyglot": "polyglot-zh_char.pkl",
                            "MCP": "MCP.p"}
