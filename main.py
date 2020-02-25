@@ -53,6 +53,8 @@ parser.add_argument('--process_type', type=str, default='train',
                     help='Type of process')
 parser.add_argument('--n_epoch', type=int, default=50,
                     help='Number of epoch')
+parser.add_argument('--start_from_epoch', type=int, default=-1,
+                    help='Epoch to continue if previously saved')
 parser.add_argument('--batch_size', type=int, default=4,
                     help='Batch size')
 parser.add_argument('--learning_rate', type=float, default=0.05,

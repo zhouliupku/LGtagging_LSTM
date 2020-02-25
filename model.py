@@ -32,6 +32,7 @@ class Tagger(nn.Module):
         self.bidirectional = args.bidirectional
         self.model_setup()
         self.save_path = None
+        self.optimizer = self.get_optimizer(args)
         
     def calc_loss(self, outputs, labels):
         """
@@ -61,7 +62,11 @@ class Tagger(nn.Module):
             raise ValueError
     
     def save_model(self, save_path, epoch):
-        torch.save(self.state_dict(), os.path.join(save_path, "epoch{}.pt".format(epoch)))
+        torch.save({"epoch": epoch,
+                    "model": self.state_dict(),
+                    "optimizer": self.optimizer.state_dict()
+                    },
+                   os.path.join(save_path, "epoch{}.pt".format(epoch)))
         pickle.dump(self.x_encoder, open(os.path.join(save_path, "x_encoder.p"), "wb"))
         pickle.dump(self.y_encoder, open(os.path.join(save_path, "y_encoder.p"), "wb"))
 
@@ -102,7 +107,7 @@ class Tagger(nn.Module):
 
 
     def train_model(self, training_data, cv_data, args, need_plot=False):
-        optimizer = self.get_optimizer(args)
+        self.train()
             
         losses_train = []
         losses_cv = []
@@ -113,7 +118,8 @@ class Tagger(nn.Module):
         batches_train = self.make_padded_batch(training_data, args.batch_size)
         batches_cv= self.make_padded_batch(cv_data, 1)
         
-        for epoch in range(args.n_epoch):
+        for epoch in range(args.start_from_epoch + 1,
+                           args.start_from_epoch + args.n_epoch + 1):
             losses_epoch = []
             for sentences, targets in batches_train:
                 self.zero_grad()   # clear accumulated gradient before each instance
@@ -123,7 +129,7 @@ class Tagger(nn.Module):
                 outputs = self.forward(sentences)
                 loss = self.calc_loss(outputs, targets)
                 loss.backward(retain_graph=True)
-                optimizer.step()
+                self.optimizer.step()
                 losses_epoch.append(loss.item())
             losses_train.append(np.mean(losses_epoch))
         
@@ -308,6 +314,7 @@ class ModelFactory(object):
         self.setup_saving(model, args)
         if args.use_cuda and torch.cuda.is_available():
             model.cuda()
+        
         return model
         
     def get_trained_model(self, logger, args):
@@ -317,6 +324,7 @@ class ModelFactory(object):
         x_encoder = pickle.load(open(os.path.join(model_path, "x_encoder.p"), "rb"))
         y_encoder = pickle.load(open(os.path.join(model_path, "y_encoder.p"), "rb"))
         
+        # Model type setup
         if args.model_type == "LSTM":
             model = LSTMTagger(logger, args, x_encoder, y_encoder)
 #        if args.model_type == "TwoLayerLSTM":
@@ -324,13 +332,24 @@ class ModelFactory(object):
         if args.model_type == "LSTMCRF":
             model = LSTMCRFTagger(logger, args, x_encoder, y_encoder)
             
-        if not (args.use_cuda and torch.cuda.is_available()):
-            model.load_state_dict(torch.load(os.path.join(model_path, "epoch_final.pt"),
-                                             map_location=torch.device('cpu')))
+        # model filename setup
+        if args.start_from_epoch >= 0:
+            model_filename = os.path.join(model_path, "epoch{}.pt".format(args.start_from_epoch))
+            if not os.path.exists(model_filename):
+                raise IOError("No model found in " + model_filename)
         else:
-            model.load_state_dict(torch.load(os.path.join(model_path, "epoch_final.pt"),
-                                             map_location=torch.device('cuda:0')))
+            model_filename = os.path.join(model_path, "epoch_final.pt")
+            
+        # load model and specify device
+        if not (args.use_cuda and torch.cuda.is_available()):
+            model.load_state_dict(torch.load(model_filename,
+                                             map_location=torch.device('cpu'))["model"])
+        else:
+            model.load_state_dict(torch.load(model_filename,
+                                             map_location=torch.device('cuda:0'))["model"])
             model.cuda()
+            
+        model.optimizer.load_state_dict(torch.load(model_filename)["optimizer"])
         model.eval()
         self.setup_saving(model, args)
         return model

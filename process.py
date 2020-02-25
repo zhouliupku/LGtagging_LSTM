@@ -38,12 +38,10 @@ def train(logger, args):
         tag_encoder = YEncoder(tagset)
         
     # Set up model
-    model = ModelFactory().get_new_model(logger, args, char_encoder, tag_encoder)
-    
-    # Load models if it was previously saved and want to continue
-#    if os.path.exists(model_path) and not args.need_train:
-#        model.load_state_dict(torch.load(os.path.join(model_path, "final.pt")))
-#        model.eval()
+    if args.start_from_epoch >= 0:
+        model = ModelFactory().get_trained_model(logger, args)
+    else:
+        model = ModelFactory().get_new_model(logger, args, char_encoder, tag_encoder)
     
     # Training
     # Step 1. Data preparation
