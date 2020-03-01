@@ -12,11 +12,9 @@ import numpy as np
 from torch import nn, optim
 from torchcrf import CRF
 from torch.autograd import Variable
-import torch.nn.utils.rnn as rnn_utils
 import matplotlib.pyplot as plt
 import datetime
 import math
-from tqdm import tqdm
 
 import config
 
@@ -26,13 +24,12 @@ class Tagger(nn.Module):
     def __init__(self, logger, args, x_encoder, y_encoder):
         super(Tagger, self).__init__()
         self.logger = logger
-        self.hidden_dim = args.hidden_dim
+        self.args = args
         self.x_encoder = x_encoder
         self.y_encoder = y_encoder
-        self.bidirectional = args.bidirectional
         self.model_setup()
         self.save_path = None
-        self.optimizer = self.get_optimizer(args)
+        self.optimizer = self.get_optimizer(self.args)
         
     def calc_loss(self, outputs, labels):
         """
@@ -207,13 +204,14 @@ class Tagger(nn.Module):
 class LSTMTagger(Tagger):
         
     def model_setup(self):
-        self.lstm = nn.LSTM(self.x_encoder.get_dim(), self.hidden_dim,
-                            bidirectional=self.bidirectional,
+        self.lstm = nn.LSTM(self.x_encoder.get_dim(), self.args.hidden_dim,
+                            bidirectional=self.args.bidirectional,
+                            num_layers=self.args.lstm_layer,
                             batch_first=True)
-        if self.bidirectional:
-            self.hidden2tag = nn.Linear(self.hidden_dim*2, self.y_encoder.get_dim())
+        if self.args.bidirectional:
+            self.hidden2tag = nn.Linear(self.args.hidden_dim*2, self.y_encoder.get_dim())
         else:
-            self.hidden2tag = nn.Linear(self.hidden_dim, self.y_encoder.get_dim())
+            self.hidden2tag = nn.Linear(self.args.hidden_dim, self.y_encoder.get_dim())
 
     def forward(self, sentence_batch):
         """
@@ -227,30 +225,6 @@ class LSTMTagger(Tagger):
         tag_space = self.hidden2tag(lstm_out)
         # dim: batch_size*batch_max_len x num_tags
         return nn.functional.log_softmax(tag_space, dim=1)
-       
-        
-#class TwoLayerLSTMTagger(Tagger):
-#        
-#    def model_setup(self):
-#        self.lstm1 = nn.LSTM(self.x_encoder.get_dim(), self.hidden_dim,
-#                             bidirectional=self.bidirectional)
-#        self.lstm2 = nn.LSTM(self.hidden_dim, self.hidden_dim,
-#                             bidirectional=self.bidirectional)
-#        if self.bidirectional:
-#            self.lstm2 = nn.LSTM(self.hidden_dim*2, self.hidden_dim,
-#                                 bidirectional=self.bidirectional)
-#            self.hidden2tag = nn.Linear(self.hidden_dim*2, self.y_encoder.get_dim())
-#        else:
-#            self.lstm2 = nn.LSTM(self.hidden_dim, self.hidden_dim,
-#                                 bidirectional=self.bidirectional)
-#            self.hidden2tag = nn.Linear(self.hidden_dim, self.y_encoder.get_dim())
-#
-#    def forward(self, sentence):
-#        lstm_out1, _ = self.lstm1(sentence.view(sentence.shape[0], 1, -1))
-#        lstm_out2, _ = self.lstm2(lstm_out1.view(sentence.shape[0], 1, -1))
-#        tag_space = self.hidden2tag(lstm_out2.view(sentence.shape[0], -1))
-#        tag_scores = nn.functional.log_softmax(tag_space, dim=1)
-#        return tag_scores
        
         
 class LSTMCRFTagger(LSTMTagger):
@@ -307,8 +281,6 @@ class ModelFactory(object):
     def get_new_model(self, logger, args, x_encoder, y_encoder):
         if args.model_type == "LSTM":
             model = LSTMTagger(logger, args, x_encoder, y_encoder)
-#        if args.model_type == "TwoLayerLSTM":
-#            model = TwoLayerLSTMTagger(logger, args, x_encoder, y_encoder)
         if args.model_type == "LSTMCRF":
             model = LSTMCRFTagger(logger, args, x_encoder, y_encoder)
         self.setup_saving(model, args)
@@ -327,8 +299,6 @@ class ModelFactory(object):
         # Model type setup
         if args.model_type == "LSTM":
             model = LSTMTagger(logger, args, x_encoder, y_encoder)
-#        if args.model_type == "TwoLayerLSTM":
-#            model = TwoLayerLSTMTagger(logger, args, x_encoder, y_encoder)
         if args.model_type == "LSTMCRF":
             model = LSTMCRFTagger(logger, args, x_encoder, y_encoder)
             

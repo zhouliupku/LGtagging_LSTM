@@ -35,7 +35,7 @@ parser.add_argument('--task_type', type=str, default='page',
                     choices=['page', 'record'],
                     help='Type of task')
 parser.add_argument('--model_type', type=str, default='LSTM',
-                    choices=['LSTM', 'TwoLayerLSTM', 'LSTMCRF'],
+                    choices=['LSTM', 'LSTMCRF'],
                     help='Type of model')
 parser.add_argument('--optimizer', type=str, default='Adam',
                     choices=['Adam', 'SGD'],        # TODO: add more choices, check if SGD still usable
@@ -61,6 +61,8 @@ parser.add_argument('--learning_rate', type=float, default=0.05,
                     help='Learning rate')
 parser.add_argument('--hidden_dim', type=int, default=6,
                     help='Hidden dim')
+parser.add_argument('--lstm_layer', type=int, default=1,
+                    help='Number of LSTM layers')
 parser.add_argument('--bidirectional', type=str2bool, default=False,
                     help='Boolean indicating whether bidirectional is enabled')
 parser.add_argument('--regex', type=str2bool, default=True,
