@@ -42,11 +42,11 @@ class XEncoder(Encoder):
         if args.main_encoder == "BERT":
             self.main_encoder = BertEncoder(args)
         else:
-            self.main_encoder = ErnieEncoder(args.main_encoder)
+            self.main_encoder = ErnieEncoder(args.main_encoder, args)
         if args.extra_encoder is None:
             self.extra_encoder = None
         else:
-            self.extra_encoder = ErnieEncoder(args.extra_encoder)
+            self.extra_encoder = ErnieEncoder(args.extra_encoder, args)
         
     def encode(self, series):
         main_embed = self.main_encoder.encode(series)
@@ -65,7 +65,7 @@ class XEncoder(Encoder):
         
     
 class ErnieEncoder(Encoder):
-    def __init__(self, embed_type):
+    def __init__(self, embed_type, args):
         embedding_filename = lg_utils.get_filename_from_embed_type(embed_type)
         with open(embedding_filename, 'rb') as infile:
             vocab, vectors = pickle.load(infile, encoding='latin1')
@@ -73,11 +73,18 @@ class ErnieEncoder(Encoder):
         self.word_embeddings = nn.Embedding(len(vocab), vectors.shape[1])
         self.word_id = {v:idx for idx, v in enumerate(vocab)}
         self.word_embeddings.weight.data.copy_(torch.from_numpy(vectors))
+        
+        self.device = "cpu"
+        if args.use_cuda and torch.cuda.is_available():
+            self.device = "cuda"
+            self.word_embeddings.cuda()
     
     def encode(self, series):
         idxs = [self.word_id[w] if w in self.word_id.keys() \
                 else self.word_id["<UNK>"] for w in series]
         sentence = torch.tensor(idxs, dtype=torch.long)
+        if self.device == "cuda":
+            sentence = sentence.cuda()
         return self.word_embeddings(sentence)
     
     def get_dim(self):
