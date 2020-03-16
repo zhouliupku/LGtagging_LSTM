@@ -32,7 +32,8 @@ REGEX_PATH = os.path.join(ROOT_PATH, "models")
 DATA_PATH = os.path.join(ROOT_PATH, "data")
 EMBEDDING_PATH = os.path.join(ROOT_PATH, "Embedding")
 EMBEDDING_FILENAME_DICT = {"polyglot": "polyglot-zh_char.pkl",
-                           "MCP": "MCP.p"}
+                           "MCP": "MCP.p",
+                           "Xingpang": "Xingpang.p"}
 PLOT_PATH = os.path.join(ROOT_PATH, "plot")
 
 BERT_DIM = 768

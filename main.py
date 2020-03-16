@@ -44,7 +44,7 @@ parser.add_argument('--main_encoder', type=str, default='BERT',
                     choices=['BERT', 'polyglot'],
                     help='Type of main input encoder')
 parser.add_argument('--extra_encoder', type=str, default=None,
-                    choices=[None, 'MCP'],
+                    choices=[None, 'MCP', 'Xingpang'],
                     help='Type of extra input encoder')
 parser.add_argument('--model_alias', type=str, default='unnamed_model',
                     help='Alias to specify variants of same type of model')
