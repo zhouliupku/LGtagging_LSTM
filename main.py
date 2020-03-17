@@ -41,7 +41,7 @@ parser.add_argument('--optimizer', type=str, default='Adam',
                     choices=['Adam', 'SGD'],        # TODO: add more choices, check if SGD still usable
                     help='Type of optimizer')
 parser.add_argument('--main_encoder', type=str, default='BERT',
-                    choices=['BERT', 'polyglot'],
+                    choices=['BERT', 'polyglot', 'shiyi'],
                     help='Type of main input encoder')
 parser.add_argument('--extra_encoder', type=str, default=None,
                     choices=[None, 'MCP', 'Xingpang'],
