@@ -60,7 +60,9 @@ def train(logger, args):
     if args.task_type == "record":
         lg_utils.tag_correct_ratio(raw_train, model, "train", args, logger)
         lg_utils.tag_correct_ratio(raw_cv, model, "cv", args, logger)
-    
+    # Step 4. tag counts
+        lg_utils.tag_count(raw_train, model, "train", args)
+        lg_utils.tag_count(raw_cv, model, "cv", args)
 def test(logger, args):
     """
     Test trained model on set-alone data; this should be done after all tunings

@@ -176,6 +176,36 @@ def correct_ratio_calculation(samples, model, args, subset_name, logger):
     
     return correct_ratio
 
+def tag_count(samples, model, subset_name, args):
+    '''
+    Take in samples (pages / records), input_encoder, model, output_encoder 
+    Get the counts of each tags
+    '''
+    inputs = [(s.get_x(), s.get_y()) for s in samples]    
+    tags = model.evaluate_model(inputs, args)   # list of (list of tags, list of tags)
+    tag_pred = [tag[0] for tag in tags]    # list of list of tags
+    tag_true = [tag[1] for tag in tags]
+    assert len(tag_pred) == len(tag_true)
+    for x, y in zip(tag_pred, tag_true):
+        assert len(x) == len(y)
+    correct_pairs = []
+    for ps,ts in zip(tag_pred, tag_true):
+        for p,t in zip(ps,ts):
+            if p == t and t not in config.special_tag_list:
+                correct_pairs.append((p,t))
+    print("correct pairs number: ", len(correct_pairs))
+    tag_set = set([item[0] for item in correct_pairs])           
+    print("tag categories: ", len(tag_set))
+    tag_statistics = []              
+    for tag in tag_set:
+        count = 0
+        for item in correct_pairs:
+            if item[1] == tag:
+                count += 1
+        tag_statistics.append((tag, count))
+    for t,c in tag_statistics:
+        print("For {} data, the number of tag {} : {}".format(subset_name, t, c))
+    return tag_statistics
 
 def load_data_from_pickle(filename, size):
     path = os.path.join(config.DATA_PATH, size)
