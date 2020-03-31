@@ -9,6 +9,7 @@ import os
 import re
 import pickle
 import numpy as np
+import pandas as pd
 
 import config
 
@@ -107,10 +108,12 @@ def tag_correct_ratio(samples, model, subset_name, args, logger):
     tags = model.evaluate_model(inputs, args)  
     tag_pred = [tag[0] for tag in tags]
     tag_true = [tag[1] for tag in tags]
+    sent_str = [tag[2] for tag in tags]
     assert len(tag_pred) == len(tag_true)
     for x, y in zip(tag_pred, tag_true):
         assert len(x) == len(y)
     correct_and_total_counts = [word_count(ps, ts) for ps, ts in zip(tag_pred, tag_true)]
+    output_mismatch(tag_pred, tag_true, sent_str)
     entity_correct_ratio = sum([x[0] for x in correct_and_total_counts]) \
                             / float(sum([x[1] for x in correct_and_total_counts]))
     
@@ -122,6 +125,26 @@ def tag_correct_ratio(samples, model, subset_name, args, logger):
     
     return tag_correct_ratio
     
+
+def output_mismatch(tag_pred, tag_true, inputs):
+    df = pd.DataFrame(columns=["word", "expected", "pred"])
+    assert len(inputs) == len(tag_pred)
+    assert len(inputs) == len(tag_true)
+    for sent, ps, ts in zip(inputs, tag_pred, tag_true):
+        assert len(sent) == len(ps)
+        assert len(sent) == len(ts)
+        true_cuts = get_cut(ts)
+        pred_cuts = get_cut(ps)
+        for tc in true_cuts:
+            if tc not in pred_cuts:      # mismatch
+                start, end, tag_type = tc
+                df = df.append({"word": sent[start:end],
+                                "expected": ts[start:end],
+                                "pred": ps[start:end]},
+                                ignore_index=True)
+    df.to_csv(os.path.join(config.OUTPUT_PATH, "mismatch.csv"),
+              encoding='utf-8-sig')
+
     
 def word_count(ps, ts):
     """
@@ -133,6 +156,9 @@ def word_count(ps, ts):
     
     
 def get_cut(seq):
+    """
+    triplets are (start_index, end_index, tag_type)
+    """
     # TODO: see if other papers handle BEG, END, null tag
     if len(seq) == 0:
         return []
@@ -156,6 +182,13 @@ def correct_ratio_calculation(samples, model, args, subset_name, logger):
     tag_pred = [tag[0] for tag in tags]
     tag_true = [tag[1] for tag in tags]
     assert len(tag_pred) == len(tag_true)
+    
+    do_stats_for_tags(tag_true, subset_name, "real")
+    correct_tag_pred = [[p for p,t in zip(ps,ts) \
+                      if p == t and t not in config.special_tag_list] \
+                        for ps,ts in zip(tag_pred, tag_true)]
+    do_stats_for_tags(correct_tag_pred, subset_name, "correctly predicted")
+    
     for x, y in zip(tag_pred, tag_true):
         assert len(x) == len(y)
     if args.task_type == "page":    # only calculate the EOS tag for page model
@@ -176,6 +209,20 @@ def correct_ratio_calculation(samples, model, args, subset_name, logger):
     
     return correct_ratio
 
+
+def do_stats_for_tags(tag_seq, subset_name, stat_type):
+    flatted_tag_true = [item for sub_list in tag_seq for item in sub_list] #list of tags
+    true_tag_set = set(flatted_tag_true)
+    for tag in true_tag_set:
+        count = 0
+        for item in flatted_tag_true:
+            if item == tag:
+                count += 1
+        print("For {} data, the number of {} tag {} : {}".format(subset_name, stat_type, tag, count))
+    
+    
+
+
 def tag_count(samples, model, subset_name, args):
     '''
     Take in samples (pages / records), input_encoder, model, output_encoder 
@@ -186,6 +233,19 @@ def tag_count(samples, model, subset_name, args):
     tag_pred = [tag[0] for tag in tags]    # list of list of tags
     tag_true = [tag[1] for tag in tags]
     assert len(tag_pred) == len(tag_true)
+    
+    true_tag_statistics = []
+    flatted_tag_true = [item for sub_list in tag_true for item in sub_list] #list of tags
+    true_tag_set = set(flatted_tag_true)
+    for tag in true_tag_set:
+        count = 0
+        for item in flatted_tag_true:
+            if item == tag:
+                count += 1
+        true_tag_statistics.append((tag, count))
+    for t,c in true_tag_statistics:
+        print("For {} data, the number of real tag {} : {}".format(subset_name, t, c))
+        
     for x, y in zip(tag_pred, tag_true):
         assert len(x) == len(y)
     correct_pairs = []
@@ -193,9 +253,7 @@ def tag_count(samples, model, subset_name, args):
         for p,t in zip(ps,ts):
             if p == t and t not in config.special_tag_list:
                 correct_pairs.append((p,t))
-    print("correct pairs number: ", len(correct_pairs))
     tag_set = set([item[0] for item in correct_pairs])           
-    print("tag categories: ", len(tag_set))
     tag_statistics = []              
     for tag in tag_set:
         count = 0
@@ -204,7 +262,7 @@ def tag_count(samples, model, subset_name, args):
                 count += 1
         tag_statistics.append((tag, count))
     for t,c in tag_statistics:
-        print("For {} data, the number of tag {} : {}".format(subset_name, t, c))
+        print("For {} data, the number of correctly predicted tag {} : {}".format(subset_name, t, c))
     return tag_statistics
 
 def load_data_from_pickle(filename, size):

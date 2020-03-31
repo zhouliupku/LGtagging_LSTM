@@ -61,8 +61,9 @@ def train(logger, args):
         lg_utils.tag_correct_ratio(raw_train, model, "train", args, logger)
         lg_utils.tag_correct_ratio(raw_cv, model, "cv", args, logger)
     # Step 4. tag counts
-        lg_utils.tag_count(raw_train, model, "train", args)
-        lg_utils.tag_count(raw_cv, model, "cv", args)
+#        lg_utils.tag_count(raw_train, model, "train", args)
+#        lg_utils.tag_count(raw_cv, model, "cv", args)
+        
 def test(logger, args):
     """
     Test trained model on set-alone data; this should be done after all tunings
@@ -80,6 +81,7 @@ def produce(logger, args):
     """
     Produce untagged data using model; this step is unsupervised
     """
+    # TODO: many things need to be updated here including evaluate_model
     # Step 1. using page_to_sent_model, parse pages to sentences
     pages_produce = lg_utils.load_data_from_pickle("pages_produce.p", args.data_size)
     

@@ -67,13 +67,14 @@ class Tagger(nn.Module):
         pickle.dump(self.x_encoder, open(os.path.join(save_path, "x_encoder.p"), "wb"))
         pickle.dump(self.y_encoder, open(os.path.join(save_path, "y_encoder.p"), "wb"))
 
-    def make_padded_batch(self, raw_data, batch_size, contain_tag=True):
+    def make_padded_batch(self, raw_data, batch_size, contain_tag=True, need_original_str=False):
         '''
         raw_batch_data: list of (list of str, list of tag str)
             if contain_tag is false, then: list of list of str only
         return: list of (Variable(Tensor(x)) of size batch_size x sent_len x embed_dim,
                  Variable(Tensor(y)) of size batch_size x sent_len)
             if contain_tag is false, then: list of Variable(Tensor(x)) only
+            if need_original_str is true, then list of (Var, Var, list of list of str)
         '''
         if contain_tag:
             raw_data = sorted(raw_data, key=lambda d: len(d[0]))
@@ -88,18 +89,31 @@ class Tagger(nn.Module):
             batch_max_len = max([len(s[0]) if contain_tag else len(s) for s in raw_batch_data])
             padded_xs = []
             padded_ys = []
+            if need_original_str:
+                padded_ss = []
             if contain_tag:
                 for x, y in raw_batch_data:
                     pad_num = batch_max_len - len(x)
                     padded_xs.append(self.x_encoder.encode(x + [config.PAD_CHAR] * pad_num).unsqueeze(0))
                     padded_ys.append(self.y_encoder.encode(y + [config.PAD_TAG] * pad_num).unsqueeze(0))
-                batches.append((Variable(torch.cat(padded_xs, dim=0)),
-                                Variable(torch.cat(padded_ys, dim=0))))
+                    if need_original_str:
+                        padded_ss.append(x + [config.PAD_CHAR] * pad_num)
+                if need_original_str:
+                    batches.append((Variable(torch.cat(padded_xs, dim=0)),
+                                    Variable(torch.cat(padded_ys, dim=0)),
+                                    padded_ss))
+                else:
+                    batches.append((Variable(torch.cat(padded_xs, dim=0)),
+                                    Variable(torch.cat(padded_ys, dim=0))))
             else:
                 for x in raw_batch_data:
                     pad_num = batch_max_len - len(x)
                     padded_xs.append(self.x_encoder.encode(x + [config.PAD_CHAR] * pad_num).unsqueeze(0))
-                batches.append(Variable(torch.cat(padded_xs, dim=0)))
+                if need_original_str:
+                    batches.append((Variable(torch.cat(padded_xs, dim=0)),
+                                    padded_ss))
+                else:
+                    batches.append(Variable(torch.cat(padded_xs, dim=0)))
         return batches
 
 
@@ -173,24 +187,29 @@ class Tagger(nn.Module):
     def evaluate_model(self, test_data, args):
         """
         Take model and test data (list of (list of str, list of tag_true)),
-        return list of (list of tag_pred, list of tag_true)
+        return list of (list of tag_pred, list of tag_true, list of str)
         """
         result_list = []
-        batches = self.make_padded_batch(test_data, 1, contain_tag=True)
+        batches = self.make_padded_batch(test_data, 1, 
+                                         contain_tag=True,
+                                         need_original_str=True)
         
         with torch.no_grad():
-            for test_sent, tags_true_encoded in batches:
-                if len(test_sent) == 0:
+            for sent, tags_true_encoded, sent_str in batches:
+                if len(sent) == 0:
                     continue
                 if args.use_cuda and torch.cuda.is_available():
-                    test_sent = test_sent.cuda()
-                tag_scores = self.forward(test_sent)
+                    sent = sent.cuda()
+                tag_scores = self.forward(sent)
                 tag_seq = self.transform(tag_scores)
                 tags_pred = self.y_encoder.decode(tag_seq)
                 # tags_true_encoded was 1 x sent_len, need to flatten it
                 tags_true_encoded = tags_true_encoded.view(-1) 
                 tags_true= self.y_encoder.decode(tags_true_encoded)
-                result_list.append((tags_pred, tags_true))
+                # sent_str is list of list of string; outside list is of len 1
+                # this is because in eval we only use batch=1
+                # fine to just call use sent_str[0]
+                result_list.append((tags_pred, tags_true, sent_str[0]))
             return result_list
         
     def transform(self, tag_scores):
