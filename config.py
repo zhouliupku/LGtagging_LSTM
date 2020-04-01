@@ -39,3 +39,5 @@ PLOT_PATH = os.path.join(ROOT_PATH, "plot")
 
 BERT_DIM = 768
 MAX_LEN = 512
+
+MAX_ENTITY_RECORD = 1E7
