@@ -34,7 +34,8 @@ EMBEDDING_PATH = os.path.join(ROOT_PATH, "Embedding")
 EMBEDDING_FILENAME_DICT = {"polyglot": "polyglot-zh_char.pkl",
                            "MCP": "MCP.p",
                            "Xingpang": "Xingpang.p",
-                           "shiyi": "shiyi.p"}
+                           "shiyi": "shiyi.p",
+                           "shiyi_folded": "shiyi_folded.p"}
 PLOT_PATH = os.path.join(ROOT_PATH, "plot")
 
 BERT_DIM = 768

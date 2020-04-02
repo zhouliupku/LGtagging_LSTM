@@ -94,6 +94,7 @@ if __name__ == "__main__":
                                     np.array([[0 for _ in range(final_emb.shape[1])]])),
                     axis=0)
     
+    # dim of final_emb: n_char x n_dim
     pickle.dump((tuple(chars), final_emb),
                 open(os.path.join(config.EMBEDDING_PATH, "{}.p".format("shiyi")), "wb"))
         
