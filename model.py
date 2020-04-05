@@ -12,11 +12,9 @@ import numpy as np
 from torch import nn, optim
 from torchcrf import CRF
 from torch.autograd import Variable
-import matplotlib.pyplot as plt
-import datetime
-import math
 
 import config
+import lg_utils
 
 
 class Tagger(nn.Module):
@@ -117,21 +115,24 @@ class Tagger(nn.Module):
         return batches
 
 
-    def train_model(self, training_data, cv_data, args, need_plot=False):
+    def train_model(self, training_data, cv_data, args):
         self.train()
-            
-        losses_train = []
-        losses_cv = []
-        if need_plot:
-            plt.figure(figsize=[20, 10])
         
         # training_data is a list of tuples (x, y), depending on batch_size, sort and build iterator
         batches_train = self.make_padded_batch(training_data, args.batch_size)
-        batches_cv= self.make_padded_batch(cv_data, 1)
+        single_batches_train = self.make_padded_batch(training_data, 1, 
+                                         contain_tag=True,
+                                         need_original_str=True)
+        single_batches_cv= self.make_padded_batch(cv_data, 1, 
+                                         contain_tag=True,
+                                         need_original_str=True)
         
         for epoch in range(args.start_from_epoch + 1,
                            args.start_from_epoch + args.n_epoch + 1):
-            losses_epoch = []
+            self.logger.info("Epoch {}".format(epoch))
+            print("Epoch {}".format(epoch))
+            
+            # Use train set
             for sentences, targets in batches_train:
                 self.zero_grad()   # clear accumulated gradient before each instance
                 if args.use_cuda and torch.cuda.is_available():
@@ -141,49 +142,98 @@ class Tagger(nn.Module):
                 loss = self.calc_loss(outputs, targets)
                 loss.backward(retain_graph=True)
                 self.optimizer.step()
-                losses_epoch.append(loss.item())
-            losses_train.append(np.mean(losses_epoch))
-        
-            self.logger.info("Epoch {}".format(epoch))
-            self.logger.info("Training Loss = {}".format(np.mean(losses_epoch)))
-            print("Epoch {}".format(epoch))
-            print("Training Loss = {}".format(np.mean(losses_epoch)))
 
-            # Use CV data to validate
-            losses_epoch_cv = []
-            with torch.no_grad():
-                for sentence, targets in batches_cv:
-                    if args.use_cuda and torch.cuda.is_available():
-                        sentence = Variable(sentence).cuda()
-                        targets = Variable(targets).cuda()
-                    outputs = self.forward(sentence)
-                    loss = self.calc_loss(outputs, targets)
-                    losses_epoch_cv.append(loss.item())
-            losses_cv.append(np.mean(losses_epoch_cv))
-            self.logger.info("CV Loss = {}".format(np.mean(losses_epoch_cv)))
-            print("CV Loss = {}".format(np.mean(losses_epoch_cv)))
+            # Evaluate on both train and cv
+            self.evaluate_core(single_batches_train)
+            self.evaluate_core(single_batches_cv)
                 
             # Save model snapshot
             self.save_model(self.save_path, epoch)
-         
-        # Plot the loss function
-        if need_plot:
-            plt.plot(list(map(math.log10, losses_train))) 
-            plt.plot(list(map(math.log10, losses_cv)))
-            plt.xlabel("Epoch")
-            plt.ylabel("Loss")
-            plt.legend(["Train", "CV"])
-            curr_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-            filename = "plot"+curr_time+".png"
-            plt.savefig(os.path.join(config.PLOT_PATH, filename))
-            plt.close()
         
         # Save final model
         self.save_model(self.save_path, "_final")
         
         
+    def evaluate_core(self, single_batches):
+        losses = []
+        result_list = []
+        with torch.no_grad():
+            for sentence, targets, sent_str in single_batches:
+                if len(sentence) == 0:
+                    continue
+                
+                if self.args.use_cuda and torch.cuda.is_available():
+                    sentence = Variable(sentence).cuda()
+                    targets = Variable(targets).cuda()
+                outputs = self.forward(sentence)
+                loss = self.calc_loss(outputs, targets)
+                losses.append(loss.item())
+                
+                tag_scores = self.forward(sentence)
+                tag_seq = self.transform(tag_scores)
+                tags_pred = self.y_encoder.decode(tag_seq)
+                # tags_true_encoded was 1 x sent_len, need to flatten it
+                targets = targets.view(-1) 
+                tags_true = self.y_encoder.decode(targets)
+                # sent_str is list of list of string; outside list is of len 1
+                # this is because in eval we only use batch=1
+                # fine to just call use sent_str[0]
+                result_list.append((tags_pred, tags_true, sent_str[0]))
+        self.logger.info("Loss = {}".format(np.mean(losses)))
+        print("Loss = {}".format(np.mean(losses)))
+        self.calc_correct_ratio_char(result_list)
+        self.calc_correct_ratio_entity(result_list)
+        
+    
+    def calc_correct_ratio_char(self, tags):
+        tag_pred = [tag[0] for tag in tags]
+        tag_true = [tag[1] for tag in tags]
+        assert len(tag_pred) == len(tag_true)
+        
+        for x, y in zip(tag_pred, tag_true):
+            assert len(x) == len(y)
+        if self.args.task_type == "page":    # only calculate the EOS tag for page model
+            upstairs = [sum([p==t for p,t in zip(ps, ts) if t == config.EOS_TAG]) \
+                                  for ps, ts in zip(tag_pred, tag_true)]
+            downstairs = [len([r for r in rs if r == config.EOS_TAG]) for rs in tag_true]
+        else:       # ignore BEG, END etc for record model, although they are learned
+            upstairs = [sum([p==t for p,t in zip(ps, ts) if t not in config.special_tag_list]) \
+                        for ps, ts in zip(tag_pred, tag_true)]
+            downstairs = [len(r) for r in tag_true if r not in config.special_tag_list]
+        # There should be no empty page/record so no check for divide-by-zero needed here
+        correct_ratio = sum(upstairs) / float(sum(downstairs))
+        
+        #TODO: precision / recall / F1 score
+        
+        # Log info of correct ratio
+        info_log = "Correct ratio is {}".format(correct_ratio)
+        print(info_log)
+        self.logger.info(info_log)
+        return correct_ratio
+    
+    def calc_correct_ratio_entity(self, tags):
+        '''
+        Return entity-level correct ratio only for record model
+        '''
+        tag_pred = [tag[0] for tag in tags]
+        tag_true = [tag[1] for tag in tags]
+        assert len(tag_pred) == len(tag_true)
+        for x, y in zip(tag_pred, tag_true):
+            assert len(x) == len(y)
+        correct_and_total_counts = [lg_utils.word_count(ps, ts) for ps, ts in zip(tag_pred, tag_true)]
+    #    lg_utils.output_entity_details(tag_pred, tag_true, sent_str, mismatch_only=False)
+        entity_correct_ratio = sum([x[0] for x in correct_and_total_counts]) \
+                                / float(sum([x[1] for x in correct_and_total_counts]))
+        
+        # Log info of correct ratio
+        info_log = "Entity level correct ratio is {}".format(entity_correct_ratio)
+        print(info_log)
+        self.logger.info(info_log)
+        
+        return entity_correct_ratio
     
 
+    # TODO: call self.evaluate_core
     def evaluate_model(self, test_data, args):
         """
         Take model and test data (list of (list of str, list of tag_true)),

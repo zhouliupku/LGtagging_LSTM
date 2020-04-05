@@ -2,6 +2,8 @@
 """
 Created on Mon Nov  4 22:59:19 2019
 
+Load from unstructured data and produce datasets
+
 @author: Zhou
 """
 
@@ -23,7 +25,8 @@ class DataLoader(object):
         '''
         self.datapath = os.path.join(os.getcwd(), "logart_html", size)
         
-    def load_data(self, interested_tags, train_perc=0.5, cv_perc=0.2):
+    def load_data(self, interested_tags,
+                  train_perc=0.6, cv_perc=0.2):
         '''
         return a tuple containing lists of pages or records, depending on mode
         '''
@@ -69,7 +72,7 @@ class DataLoader(object):
             if len(candi) != 2:
                 raise ValueError
             if len(candi[1]) == 0:
-                print("Page {} is empty!".format(candi[0]))
+#                print("Page {} is empty!".format(candi[0]))
                 continue
             if len(candi[1]) >= MAX_LEN:
                 print("Page {} is too long!".format(candi[0]))
@@ -97,9 +100,13 @@ class DataLoader(object):
                 tags = page_tags[head_char_idx : (head_char_idx + sent_len)]
                 # substitution
                 record_tag = []
-                for tag in tags:
+                
+                for tag in tags:          # None means take all
                     if (interested_tags is None) or (tag in interested_tags):
-                        record_tag.append(tag)          # None means take all
+                        if tag == "entry_addr":
+                            record_tag.append("biog_addr")
+                        else:
+                            record_tag.append(tag)
                     else:
                         record_tag.append(NULL_TAG)
                 records_in_page.append(Record(text, record_tag))
@@ -183,15 +190,12 @@ if __name__ == "__main__":
         loader = DataLoader(size)
         
         # Model hyper-parameter definition
-        interested_tags = [loader.get_person_tag()]
-        interested_tags.extend(["post_time", "office", "jiguan"])
+        interested_tags = ["person", "post_time", "jiguan", "entry_way",
+                           "post_type", "office", "entry_addr", "next_office",
+                           "prev_office", "zi", "kins", "entry_time", "post_address",
+                           "source_tag", "othername", "hao", "biog_addr"]
         
-        # We want to load all tags if it's in full mode, by setting interested_tags
-        # to be None
-        if size == "full":
-            interested_tags = None
-        
-        data = loader.load_data(interested_tags)
+        data = loader.load_data(interested_tags, train_perc=0.6, cv_perc=0.2)
         dump_data_to_pickle(data[0], "pages_train.p", size)
         dump_data_to_pickle(data[1], "pages_cv.p", size)
         dump_data_to_pickle(data[2], "pages_test.p", size)

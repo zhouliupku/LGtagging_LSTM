@@ -108,12 +108,12 @@ def tag_correct_ratio(samples, model, subset_name, args, logger):
     tags = model.evaluate_model(inputs, args)  
     tag_pred = [tag[0] for tag in tags]
     tag_true = [tag[1] for tag in tags]
-    sent_str = [tag[2] for tag in tags]
+#    sent_str = [tag[2] for tag in tags]
     assert len(tag_pred) == len(tag_true)
     for x, y in zip(tag_pred, tag_true):
         assert len(x) == len(y)
     correct_and_total_counts = [word_count(ps, ts) for ps, ts in zip(tag_pred, tag_true)]
-    output_entity_details(tag_pred, tag_true, sent_str, mismatch_only=False)
+#    output_entity_details(tag_pred, tag_true, sent_str, mismatch_only=False)
     entity_correct_ratio = sum([x[0] for x in correct_and_total_counts]) \
                             / float(sum([x[1] for x in correct_and_total_counts]))
     
@@ -123,7 +123,7 @@ def tag_correct_ratio(samples, model, subset_name, args, logger):
     print(info_log)
     logger.info(info_log)
     
-    return tag_correct_ratio
+    return entity_correct_ratio
     
 
 def output_entity_details(tag_pred, tag_true, inputs, mismatch_only=True):
@@ -191,11 +191,11 @@ def correct_ratio_calculation(samples, model, args, subset_name, logger):
     tag_true = [tag[1] for tag in tags]
     assert len(tag_pred) == len(tag_true)
     
-    do_stats_for_tags(tag_true, subset_name, "real")
-    correct_tag_pred = [[p for p,t in zip(ps,ts) \
-                      if p == t and t not in config.special_tag_list] \
-                        for ps,ts in zip(tag_pred, tag_true)]
-    do_stats_for_tags(correct_tag_pred, subset_name, "correctly predicted")
+#    do_stats_for_tags(tag_true, subset_name, "real")
+#    correct_tag_pred = [[p for p,t in zip(ps,ts) \
+#                      if p == t and t not in config.special_tag_list] \
+#                        for ps,ts in zip(tag_pred, tag_true)]
+#    do_stats_for_tags(correct_tag_pred, subset_name, "correctly predicted")
     
     for x, y in zip(tag_pred, tag_true):
         assert len(x) == len(y)
