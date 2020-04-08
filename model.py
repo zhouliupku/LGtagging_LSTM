@@ -144,7 +144,11 @@ class Tagger(nn.Module):
                 self.optimizer.step()
 
             # Evaluate on both train and cv
+            self.logger.info("Train")
+            print("Train")
             self.evaluate_core(single_batches_train)
+            self.logger.info("CV")
+            print("CV")
             self.evaluate_core(single_batches_cv)
                 
             # Save model snapshot
@@ -181,35 +185,49 @@ class Tagger(nn.Module):
                 result_list.append((tags_pred, tags_true, sent_str[0]))
         self.logger.info("Loss = {}".format(np.mean(losses)))
         print("Loss = {}".format(np.mean(losses)))
-        self.calc_correct_ratio_char(result_list)
+        self.calc_metric_char(result_list)
         self.calc_correct_ratio_entity(result_list)
         
     
-    def calc_correct_ratio_char(self, tags):
+    def calc_metric_char(self, tags):
+        # Both tag_pred and tag_true are list of list of tags
         tag_pred = [tag[0] for tag in tags]
         tag_true = [tag[1] for tag in tags]
         assert len(tag_pred) == len(tag_true)
-        
-        for x, y in zip(tag_pred, tag_true):
-            assert len(x) == len(y)
+                
         if self.args.task_type == "page":    # only calculate the EOS tag for page model
-            upstairs = [sum([p==t for p,t in zip(ps, ts) if t == config.EOS_TAG]) \
-                                  for ps, ts in zip(tag_pred, tag_true)]
-            downstairs = [len([r for r in rs if r == config.EOS_TAG]) for rs in tag_true]
+            tag_to_idx, confusion_matrix = lg_utils.prepare_confusion_matrix(tag_true, tag_pred,
+                                                                             [config.INS_TAG, config.EOS_TAG])
+            precision, recall, accuracy, f_score = lg_utils.process_confusion_matrix(confusion_matrix,
+                                                                                     tag_to_idx[config.EOS_TAG])
+            info_log = "P: {}, R: {}, A: {}, F: {}".format(precision, recall, accuracy, f_score)
+            print(info_log)
+            self.logger.info(info_log)
+            
         else:       # ignore BEG, END etc for record model, although they are learned
-            upstairs = [sum([p==t for p,t in zip(ps, ts) if t not in config.special_tag_list]) \
-                        for ps, ts in zip(tag_pred, tag_true)]
-            downstairs = [len(r) for r in tag_true if r not in config.special_tag_list]
-        # There should be no empty page/record so no check for divide-by-zero needed here
-        correct_ratio = sum(upstairs) / float(sum(downstairs))
-        
-        #TODO: precision / recall / F1 score
-        
-        # Log info of correct ratio
-        info_log = "Correct ratio is {}".format(correct_ratio)
-        print(info_log)
-        self.logger.info(info_log)
-        return correct_ratio
+            tag_list = sorted(list(self.y_encoder.tag_dict.keys()))
+            tag_list = [t for t in tag_list if t not in config.special_tag_list]
+            tag_to_idx, confusion_matrix = lg_utils.prepare_confusion_matrix(tag_true, tag_pred, tag_list)
+            
+            # Method 1: micro, without null tag
+            precision, recall, accuracy, f_score = \
+                lg_utils.process_confusion_matrix_micro(confusion_matrix, tag_to_idx, [config.NULL_TAG])
+            info_log = "Micro w/o null: P: {}, R: {}, A: {}, F: {}".format(precision, recall, accuracy, f_score)
+            print(info_log)
+            self.logger.info(info_log)
+            # Method 2: macro, without null tag
+            precision, recall, accuracy, f_score = \
+                lg_utils.process_confusion_matrix_macro(confusion_matrix, tag_to_idx, [config.NULL_TAG])
+            info_log = "Macro w/o null: P: {}, R: {}, A: {}, F: {}".format(precision, recall, accuracy, f_score)
+            print(info_log)
+            self.logger.info(info_log)
+            # Method 3: macro, including null tag
+            precision, recall, accuracy, f_score = \
+                lg_utils.process_confusion_matrix_macro(confusion_matrix, tag_to_idx)
+            info_log = "Macro w/ null: P: {}, R: {}, A: {}, F: {}".format(precision, recall, accuracy, f_score)
+            print(info_log)
+            self.logger.info(info_log)
+            
     
     def calc_correct_ratio_entity(self, tags):
         '''
@@ -224,9 +242,18 @@ class Tagger(nn.Module):
     #    lg_utils.output_entity_details(tag_pred, tag_true, sent_str, mismatch_only=False)
         entity_correct_ratio = sum([x[0] for x in correct_and_total_counts]) \
                                 / float(sum([x[1] for x in correct_and_total_counts]))
-        
+                
         # Log info of correct ratio
         info_log = "Entity level correct ratio is {}".format(entity_correct_ratio)
+        print(info_log)
+        self.logger.info(info_log)
+        
+        tag_list = sorted(list(self.y_encoder.tag_dict.keys()))
+        tag_list = [t for t in tag_list if t not in config.special_tag_list]
+        precision, recall, accuracy, f_score, collocation_ratio = \
+            lg_utils.calc_entity_metrics(tag_pred, tag_true, tag_list)
+        info_log = "Entity micro w/ null: P: {}, R: {}, A: {}, F: {}, C:{}"\
+            .format(precision, recall, accuracy, f_score, collocation_ratio)
         print(info_log)
         self.logger.info(info_log)
         

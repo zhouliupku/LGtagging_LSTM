@@ -77,6 +77,8 @@ if __name__ == "__main__":
     # Set random seeds
     np.random.seed(0)
     torch.manual_seed(0)
+    np.seterr(divide='ignore')
+    np.seterr(invalid='ignore')
 
     # Logging
     curr_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")

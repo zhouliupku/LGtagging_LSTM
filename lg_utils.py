@@ -10,6 +10,7 @@ import re
 import pickle
 import numpy as np
 import pandas as pd
+import itertools
 
 import config
 
@@ -18,6 +19,10 @@ def convert_to_orig(s):
     Convert string from database to corresponding original text
     """
     return s.replace(' ', config.PADDING_CHAR)
+
+
+def concat_lists(ls):
+    return list(itertools.chain.from_iterable(ls))
 
 
 def random_separate(xs, percs):
@@ -50,6 +55,13 @@ def modify_tag_seq(text, tag_seq, keyword, tagname):
 
 def is_empty_cell(x):
     return (not isinstance(x, str)) or len(x) == 0
+    
+    
+def nan_weighted_average(arr, w):
+    a = np.array(arr)
+    weights = np.array(w)
+    indices = ~np.isnan(a)
+    return np.average(a[indices], weights=weights[indices])
 
 
 def get_sent_len_for_pages(tag_seq_list, eos_tag):
@@ -97,7 +109,72 @@ def get_data_from_samples(samples, x_encoder, y_encoder):
         retv.append((p.get_x(x_encoder), p.get_y(y_encoder)))
     return retv
         
-#    return [(p.get_x(x_encoder), p.get_y(y_encoder)) for p in samples]
+        
+def prepare_confusion_matrix(tag_true, tag_pred, tag_list):
+    tag_to_idx = {t: i for i, t in enumerate(tag_list)}
+    confusion_matrix = np.zeros([len(tag_list), len(tag_list)])
+    
+    for ps, ts in zip(tag_pred, tag_true):
+        assert len(ps) == len(ts)
+        for p, t in zip(ps, ts):
+            if p not in tag_list or t not in tag_list:
+                continue
+            confusion_matrix[tag_to_idx[t], tag_to_idx[p]] += 1
+            
+    return tag_to_idx, confusion_matrix
+
+
+def process_confusion_matrix(confusion_matrix, tag_idx):
+    tp = confusion_matrix[tag_idx, tag_idx]
+    fp = confusion_matrix[:, tag_idx].sum() - tp
+    fn = confusion_matrix[tag_idx, :].sum() - tp
+    tn = confusion_matrix.sum() - tp - fp - fn
+    precision = tp / float(tp + fp)
+    recall = tp / float(tp + fn)
+    accuracy = (tp + tn) / float(confusion_matrix.sum())
+    f_score = 2 / (1 / precision + 1 / recall)
+    return precision, recall, accuracy, f_score
+
+
+def process_confusion_matrix_macro(confusion_matrix, tag_to_idx,
+                                   ignore_tags=[], weighted=True):
+    #TODO: unit tests
+    precisions, recalls, accuracys, f_scores, weights = [], [], [], [], []
+    for tag_name, tag_idx in tag_to_idx.items():
+        if tag_name in ignore_tags:
+            continue
+        weights.append(confusion_matrix[tag_idx, :].sum() if weighted else 1.0)
+        precision, recall, accuracy, f_score = process_confusion_matrix(confusion_matrix, tag_idx)
+        precisions.append(precision)
+        recalls.append(recall)
+        accuracys.append(accuracy)
+        f_scores.append(f_score)
+    
+    precision_macro = nan_weighted_average(precisions, weights)
+    recall_macro = nan_weighted_average(recalls, weights)
+    accuracy_macro = nan_weighted_average(accuracys, weights)
+    f_score_macro = nan_weighted_average(f_scores, weights)
+    return precision_macro, recall_macro, accuracy_macro, f_score_macro
+
+
+def process_confusion_matrix_micro(confusion_matrix, tag_to_idx, ignore_tags=[]):
+    tps, fps, fns, tns = [], [], [], []
+    for tag_name, tag_idx in tag_to_idx.items():
+        if tag_name in ignore_tags:
+            continue
+        tp = confusion_matrix[tag_idx, tag_idx]
+        fp = confusion_matrix[:, tag_idx].sum() - tp
+        fn = confusion_matrix[tag_idx, :].sum() - tp
+        tn = confusion_matrix.sum() - tp - fp - fn
+        tps.append(tp)
+        fps.append(fp)
+        fns.append(fn)
+        tns.append(tn)
+    precision = sum(tps) / float(sum(tps) + sum(fps))
+    recall = sum(tps) / float(sum(tps) + sum(fns))
+    accuracy = (sum(tps) + sum(tns)) / float(sum(tps) + sum(fps) + sum(fns) + sum(tns))
+    f_score = 2 / (1 / precision + 1 / recall)
+    return precision, recall, accuracy, f_score
 
 
 def tag_correct_ratio(samples, model, subset_name, args, logger):
@@ -152,14 +229,64 @@ def output_entity_details(tag_pred, tag_true, inputs, mismatch_only=True):
     df.to_csv(os.path.join(config.OUTPUT_PATH, "entity_detail.csv"),
               encoding='utf-8-sig',
               index=False)
+    
+    
+def is_collocated(c1, c2):
+    return c1[0] == c2[0] and c1[1] == c2[1]
+
+    
+def calc_entity_metrics(tag_pred, tag_true, tag_list):
+    tag_to_idx = {t: i for i, t in enumerate(tag_list)}
+    n_dim = len(tag_list) + 1
+    confusion_matrix = np.zeros([n_dim, n_dim])
+    
+    for ps, ts in zip(tag_pred, tag_true):
+        assert len(ps) == len(ts)
+        pcs = [c for c in get_cut(ps) if c[2] in tag_list]
+        tcs = [c for c in get_cut(ts) if c[2] in tag_list]
+        # Round 1: handle all pred cuts
+        for pc in pcs:
+            has_collocated = False
+            for tc in tcs:
+                if is_collocated(pc, tc):
+                    confusion_matrix[tag_to_idx[tc[2]], tag_to_idx[pc[2]]] += 1
+                    has_collocated = True
+                    break
+            # If no match after checking all tc, then increment last row of matrix
+            if not has_collocated:
+                confusion_matrix[n_dim - 1, tag_to_idx[pc[2]]] += 1
+        # Round 2: handle all true cuts without collocation
+        for tc in tcs:
+            for pc in pcs:
+                if is_collocated(pc, tc):
+                    # Don't increment here, to avoid double counting
+                    has_collocated = True
+                    break
+            # If no match after checking all pc, then increment last col of matrix
+            if not has_collocated:
+                confusion_matrix[tag_to_idx[tc[2]], n_dim - 1] += 1
+            
+    # calculate metrics, this is a generalization of micro metrics
+    tp = confusion_matrix.diagonal().sum()
+    tp_plus_fp = confusion_matrix[:, :-1].sum()
+    tp_plus_fn = confusion_matrix[:-1, :].sum()
+    
+    precision = tp / float(tp_plus_fp)
+    recall = tp / float(tp_plus_fn)
+    accuracy = (tp + 0) / float(confusion_matrix.sum())
+    f_score = 2 / (1 / precision + 1 / recall)
+    collocation_ratio = confusion_matrix[:-1, :-1].sum() / float(confusion_matrix.sum())
+    return precision, recall, accuracy, f_score, collocation_ratio
 
     
 def word_count(ps, ts):
     """
-    given two lists of tags, count matched words
+    given two lists of tags, count matched words and total words of the first list
+    both counts exclude special tags, i.e. BEG, END, etc
     """
-    pred_cuts = get_cut(ps)
-    matches = [c for c in get_cut(ts) if c in pred_cuts]
+    pred_cuts = [c for c in get_cut(ps) if c[2] not in config.special_tag_list]
+    true_cuts = get_cut(ts)
+    matches = [c for c in pred_cuts if c in true_cuts]
     return len(matches), len(pred_cuts)
     
     
@@ -206,7 +333,7 @@ def correct_ratio_calculation(samples, model, args, subset_name, logger):
     else:       # ignore BEG, END etc for record model, although they are learned
         upstairs = [sum([p==t for p,t in zip(ps, ts) if t not in config.special_tag_list]) \
                     for ps, ts in zip(tag_pred, tag_true)]
-        downstairs = [len(r) for r in tag_true if r not in config.special_tag_list]
+        downstairs = [len([r for r in rs if r not in config.special_tag_list]) for rs in tag_true]
     # There should be no empty page/record so no check for divide-by-zero needed here
     correct_ratio = sum(upstairs) / float(sum(downstairs))
     
