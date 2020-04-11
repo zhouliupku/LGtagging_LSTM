@@ -55,11 +55,12 @@ def train(logger, args):
         model = ModelFactory().get_trained_model(logger, args)
         
     # Step 3. Evaluation with correct ratio
-    lg_utils.correct_ratio_calculation(raw_train, model, args, "train", logger)
-    lg_utils.correct_ratio_calculation(raw_cv, model, args, "cv", logger)
-    if args.task_type == "record":
-        lg_utils.tag_correct_ratio(raw_train, model, "train", args, logger)
-        lg_utils.tag_correct_ratio(raw_cv, model, "cv", args, logger)
+#    lg_utils.correct_ratio_calculation(raw_train, model, args, "train", logger)
+#    lg_utils.correct_ratio_calculation(raw_cv, model, args, "cv", logger)
+#    if args.task_type == "record":
+#        lg_utils.tag_correct_ratio(raw_train, model, "train", args, logger)
+#        lg_utils.tag_correct_ratio(raw_cv, model, "cv", args, logger)
+    
     # Step 4. tag counts
 #        lg_utils.tag_count(raw_train, model, "train", args)
 #        lg_utils.tag_count(raw_cv, model, "cv", args)

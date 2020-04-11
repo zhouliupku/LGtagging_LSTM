@@ -107,6 +107,8 @@ class Tagger(nn.Module):
                 for x in raw_batch_data:
                     pad_num = batch_max_len - len(x)
                     padded_xs.append(self.x_encoder.encode(x + [config.PAD_CHAR] * pad_num).unsqueeze(0))
+                    if need_original_str:
+                        padded_ss.append(x + [config.PAD_CHAR] * pad_num)
                 if need_original_str:
                     batches.append((Variable(torch.cat(padded_xs, dim=0)),
                                     padded_ss))
@@ -120,12 +122,7 @@ class Tagger(nn.Module):
         
         # training_data is a list of tuples (x, y), depending on batch_size, sort and build iterator
         batches_train = self.make_padded_batch(training_data, args.batch_size)
-        single_batches_train = self.make_padded_batch(training_data, 1, 
-                                         contain_tag=True,
-                                         need_original_str=True)
-        single_batches_cv= self.make_padded_batch(cv_data, 1, 
-                                         contain_tag=True,
-                                         need_original_str=True)
+        single_batches_cv= self.make_padded_batch(cv_data, 1)
         
         for epoch in range(args.start_from_epoch + 1,
                            args.start_from_epoch + args.n_epoch + 1):
@@ -146,7 +143,7 @@ class Tagger(nn.Module):
             # Evaluate on both train and cv
             self.logger.info("Train")
             print("Train")
-            self.evaluate_core(single_batches_train)
+            self.evaluate_core(batches_train)
             self.logger.info("CV")
             print("CV")
             self.evaluate_core(single_batches_cv)
@@ -158,11 +155,11 @@ class Tagger(nn.Module):
         self.save_model(self.save_path, "_final")
         
         
-    def evaluate_core(self, single_batches):
+    def evaluate_core(self, batches):
         losses = []
         result_list = []
         with torch.no_grad():
-            for sentence, targets, sent_str in single_batches:
+            for sentence, targets in batches:
                 if len(sentence) == 0:
                     continue
                 
@@ -175,14 +172,13 @@ class Tagger(nn.Module):
                 
                 tag_scores = self.forward(sentence)
                 tag_seq = self.transform(tag_scores)
+                # tag_seq is batch_size*batch_max_len
                 tags_pred = self.y_encoder.decode(tag_seq)
-                # tags_true_encoded was 1 x sent_len, need to flatten it
+                # targets is batch_size x batch_max_len, need flatten
                 targets = targets.view(-1) 
                 tags_true = self.y_encoder.decode(targets)
-                # sent_str is list of list of string; outside list is of len 1
-                # this is because in eval we only use batch=1
-                # fine to just call use sent_str[0]
-                result_list.append((tags_pred, tags_true, sent_str[0]))
+                result_list.append((tags_pred, tags_true))
+                
         self.logger.info("Loss = {}".format(np.mean(losses)))
         print("Loss = {}".format(np.mean(losses)))
         self.calc_metric_char(result_list)
@@ -266,33 +262,34 @@ class Tagger(nn.Module):
         Take model and test data (list of (list of str, list of tag_true)),
         return list of (list of tag_pred, list of tag_true, list of str)
         """
-        result_list = []
-        batches = self.make_padded_batch(test_data, 1, 
-                                         contain_tag=True,
-                                         need_original_str=True)
-        
-        with torch.no_grad():
-            for sent, tags_true_encoded, sent_str in batches:
-                if len(sent) == 0:
-                    continue
-                if args.use_cuda and torch.cuda.is_available():
-                    sent = sent.cuda()
-                tag_scores = self.forward(sent)
-                tag_seq = self.transform(tag_scores)
-                tags_pred = self.y_encoder.decode(tag_seq)
-                # tags_true_encoded was 1 x sent_len, need to flatten it
-                tags_true_encoded = tags_true_encoded.view(-1) 
-                tags_true= self.y_encoder.decode(tags_true_encoded)
-                # sent_str is list of list of string; outside list is of len 1
-                # this is because in eval we only use batch=1
-                # fine to just call use sent_str[0]
-                result_list.append((tags_pred, tags_true, sent_str[0]))
-            return result_list
+        pass
+#        result_list = []
+#        batches = self.make_padded_batch(test_data, 1, 
+#                                         contain_tag=True,
+#                                         need_original_str=True)
+#        
+#        with torch.no_grad():
+#            for sent, tags_true_encoded, sent_str in batches:
+#                if len(sent) == 0:
+#                    continue
+#                if args.use_cuda and torch.cuda.is_available():
+#                    sent = sent.cuda()
+#                tag_scores = self.forward(sent)
+#                tag_seq = self.transform(tag_scores)
+#                tags_pred = self.y_encoder.decode(tag_seq)
+#                # tags_true_encoded was 1 x sent_len, need to flatten it
+#                tags_true_encoded = tags_true_encoded.view(-1) 
+#                tags_true= self.y_encoder.decode(tags_true_encoded)
+#                # sent_str is list of list of string; outside list is of len 1
+#                # this is because in eval we only use batch=1
+#                # fine to just call use sent_str[0]
+#                result_list.append((tags_pred, tags_true, sent_str[0]))
+#            return result_list
         
     def transform(self, tag_scores):
         """
-        Convert tag_scores (tensor of sent_len x tag_num) to
-        indices of most likely tags (tensor of sent_len)
+        Convert tag_scores (tensor of batch_size*batch_max_len x tag_num) to
+        indices of most likely tags (tensor of batch_size*batch_max_len)
         """
         return tag_scores.max(dim=1).indices
     
@@ -335,7 +332,7 @@ class LSTMCRFTagger(LSTMTagger):
     def forward(self, sentence_batch):
         """
         Input dim: batch_size x batch_max_len x embed_dim
-        Output dim: batch_size*batch_max_len x num_tags
+        Output dim: batch_size x batch_max_len x num_tags
         """
         batch_size = sentence_batch.shape[0]
         lstm_out, _ = self.lstm(sentence_batch)
@@ -359,11 +356,11 @@ class LSTMCRFTagger(LSTMTagger):
         
     def transform(self, tag_scores):
         """
-        Convert tag_scores (tensor of 1 x sent_len x tag_num) to
-        indices of most likely tags (tensor of sent_len)
+        Convert tag_scores (tensor of batch_size x batch_max_len x num_tags) to
+        indices of most likely tags (tensor of batch_size*batch_max_len)
         """
-        # here we don't need mask because batch size is 1 so no PAD involved
-        # dim: 1 x sent_len
+        # here we produce tag prediction for padded positions too
+        # dim: batch_size x batch_max_len
         best_seq = torch.tensor(self.crf.decode(tag_scores),
                                 dtype=torch.long)
         best_seq = best_seq.view(-1)
