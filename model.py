@@ -352,7 +352,7 @@ class LSTMCRFTagger(LSTMTagger):
         """
         # mask: byte tensor with dim = batch_size x batch_max_len
         mask = (labels < self.y_encoder.get_num_unmask_tag())
-        return -self.crf.forward(outputs, labels, mask=mask)
+        return -self.crf.forward(outputs, labels, mask=mask, reduction='mean')
         
     def transform(self, tag_scores):
         """
