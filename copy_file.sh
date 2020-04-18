@@ -8,7 +8,7 @@ if [ $# == 0 ] ; then
     exit 1;
 fi
 
-while getopts ":ht:d:m:a:e:" optname; do
+while getopts ":ht:d:m:a:s:e:" optname; do
     case "$optname" in
       "t")
         TASK=$OPTARG;
@@ -22,8 +22,11 @@ while getopts ":ht:d:m:a:e:" optname; do
       "a")
         ALIAS=$OPTARG;
         ;;
+      "s")
+        START_EPOCH=$OPTARG;
+        ;;
       "e")
-        EPOCH=$OPTARG;
+        END_EPOCH=$OPTARG;
         ;;
       "h")
         echo $USAGE
@@ -58,7 +61,9 @@ echo $TARGET
 chmod 775 "${TARGET}"
 stat "${TARGET}"
 
-cp ${SOURCE}/epoch${EPOCH}.pt "${TARGET}"
+for EPOCH in $(seq $START_EPOCH $END_EPOCH); do
+	cp ${SOURCE}/epoch${EPOCH}.pt "${TARGET}"
+done
 cp ${SOURCE}/x_encoder.p "${TARGET}"
 cp ${SOURCE}/y_encoder.p "${TARGET}"
 

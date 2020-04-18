@@ -43,9 +43,8 @@ parser.add_argument('--optimizer', type=str, default='Adam',
 parser.add_argument('--main_encoder', type=str, default='BERT',
                     choices=['BERT', 'polyglot', 'shiyi'],
                     help='Type of main input encoder')
-parser.add_argument('--extra_encoder', type=str, default=None,
-                    choices=[None, 'MCP', 'Xingpang', 'shiyi_folded'],
-                    help='Type of extra input encoder')
+parser.add_argument('--extra_encoder', default=None, nargs="+",
+                    help='Type of extra input encoder, can be multiple')
 parser.add_argument('--model_alias', type=str, default='unnamed_model',
                     help='Alias to specify variants of same type of model')
 parser.add_argument('--process_type', type=str, default='train',

@@ -31,11 +31,10 @@ OUTPUT_PATH = os.path.join(ROOT_PATH, "result")
 REGEX_PATH = os.path.join(ROOT_PATH, "models")
 DATA_PATH = os.path.join(ROOT_PATH, "data")
 EMBEDDING_PATH = os.path.join(ROOT_PATH, "Embedding")
-EMBEDDING_FILENAME_DICT = {"polyglot": "polyglot-zh_char.pkl",
-                           "MCP": "MCP.p",
-                           "Xingpang": "Xingpang.p",
-                           "shiyi": "shiyi.p",
-                           "shiyi_folded": "shiyi_folded.p"}
+EXTRA_EMBED_NAMES = ["MCP", "Xingpang", "Xingpang_top100",
+                     "shiyi", "shiyi_folded"]
+EMBEDDING_FILENAME_DICT = {x: x+".p" for x in EXTRA_EMBED_NAMES}
+EMBEDDING_FILENAME_DICT["polyglot"] = "polyglot-zh_char.pkl"
 PLOT_PATH = os.path.join(ROOT_PATH, "plot")
 
 BERT_DIM = 768

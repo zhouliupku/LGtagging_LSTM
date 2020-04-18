@@ -44,24 +44,24 @@ class XEncoder(Encoder):
         else:
             self.main_encoder = ErnieEncoder(args.main_encoder, args)
         if args.extra_encoder is None:
-            self.extra_encoder = None
+            self.extra_encoders = None
         else:
-            self.extra_encoder = ErnieEncoder(args.extra_encoder, args)
+            self.extra_encoders = [ErnieEncoder(ee, args) for ee in args.extra_encoder]
         
     def encode(self, series):
         main_embed = self.main_encoder.encode(series)
-        if self.extra_encoder is None:
+        if self.extra_encoders is None:
             return main_embed
-        extra_embed = self.extra_encoder.encode(series)
-        assert main_embed.shape[0] == extra_embed.shape[0]
-        final_embed = torch.cat((main_embed, extra_embed), 1)
+        extra_embeds = [ee.encode(series) for ee in self.extra_encoders]
+        final_embed = torch.cat([main_embed] + extra_embeds, 1)
         return final_embed
     
     def get_dim(self):
-        if self.extra_encoder is None:
+        if self.extra_encoders is None:
             return self.main_encoder.get_dim()
         else:
-            return self.main_encoder.get_dim() + self.extra_encoder.get_dim()
+            return self.main_encoder.get_dim() \
+                + sum([ee.get_dim() for ee in self.extra_encoders])
         
     
 class ErnieEncoder(Encoder):
