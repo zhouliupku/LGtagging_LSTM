@@ -64,7 +64,7 @@ parser.add_argument('--lstm_layer', type=int, default=1,
                     help='Number of LSTM layers')
 parser.add_argument('--bidirectional', type=str2bool, default=False,
                     help='Boolean indicating whether bidirectional is enabled')
-parser.add_argument('--regex', type=str2bool, default=True,
+parser.add_argument('--regex', type=str2bool, default=False,
                     help='Whether to use RegEx in producing')
 parser.add_argument('--need_train', type=str2bool, default=True,
                     help='Boolean indicating whether need training model')

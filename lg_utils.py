@@ -65,12 +65,15 @@ def nan_weighted_average(arr, w):
 
 
 def get_sent_len_for_pages(tag_seq_list, eos_tag):
+    """
+    tag_seq_list: list of list of tags
+    """
     parsed_sent_len_for_pages = []
     for tag_seq in tag_seq_list:
         # make list of int (i.e. sentence lengths) out of list of tags
         parsed_sent_len = []
         current_len = 0
-        for tag in tag_seq:
+        for tag in tag_seq[1:-1]: # ignore <S> and </S>
             current_len += 1
             if tag == eos_tag:
                 parsed_sent_len.append(current_len)

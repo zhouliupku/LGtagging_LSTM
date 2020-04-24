@@ -256,35 +256,26 @@ class Tagger(nn.Module):
         return entity_correct_ratio
     
 
-    # TODO: call self.evaluate_core
     def evaluate_model(self, test_data, args):
         """
-        Take model and test data (list of (list of str, list of tag_true)),
-        return list of (list of tag_pred, list of tag_true, list of str)
+        Take model and test data (list of (list of str)),
+        return list of list of tag
         """
-        pass
-#        result_list = []
-#        batches = self.make_padded_batch(test_data, 1, 
-#                                         contain_tag=True,
-#                                         need_original_str=True)
-#        
-#        with torch.no_grad():
-#            for sent, tags_true_encoded, sent_str in batches:
-#                if len(sent) == 0:
-#                    continue
-#                if args.use_cuda and torch.cuda.is_available():
-#                    sent = sent.cuda()
-#                tag_scores = self.forward(sent)
-#                tag_seq = self.transform(tag_scores)
-#                tags_pred = self.y_encoder.decode(tag_seq)
-#                # tags_true_encoded was 1 x sent_len, need to flatten it
-#                tags_true_encoded = tags_true_encoded.view(-1) 
-#                tags_true= self.y_encoder.decode(tags_true_encoded)
-#                # sent_str is list of list of string; outside list is of len 1
-#                # this is because in eval we only use batch=1
-#                # fine to just call use sent_str[0]
-#                result_list.append((tags_pred, tags_true, sent_str[0]))
-#            return result_list
+        result_list = []
+        with torch.no_grad():
+            for sent in test_data:
+                if len(sent) == 0:
+                    continue
+                sent = Variable(self.x_encoder.encode(sent).unsqueeze(0))
+                # list of (Variable(Tensor(x)) of size 1 x sent_len x embed_dim,
+                if args.use_cuda and torch.cuda.is_available():
+                    sent = sent.cuda()
+                tag_scores = self.forward(sent)
+                tag_seq = self.transform(tag_scores)
+                tags_pred = self.y_encoder.decode(tag_seq)
+                result_list.append(tags_pred)
+            return result_list
+        
         
     def transform(self, tag_scores):
         """

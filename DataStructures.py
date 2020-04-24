@@ -70,6 +70,7 @@ class Record(object):
 
     def set_tag(self, tag_seq):
         """
+        tag_seq: list of tags, begin with BEG_TAG, ending with END_TAG
         """
         assert len(tag_seq) == len(self.chars)
         for i in range(1, len(tag_seq) - 1):
