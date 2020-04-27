@@ -12,7 +12,7 @@ import itertools
 
 import lg_utils
 import config
-from Encoders import XEncoder, YEncoder, BertEncoder
+from Encoders import XEncoder, YEncoder
 from data_save import ExcelSaver, HtmlSaver
 from model import ModelFactory
 
@@ -31,28 +31,22 @@ def train(logger, args):
     
     # Set up encoders
     char_encoder = XEncoder(args)
-#    vars(args)['embedding_dim'] = char_encoder.embedding_dim
     if args.task_type == "page":
-        tag_encoder = YEncoder([config.INS_TAG, config.EOS_TAG, config.BEG_TAG, config.END_TAG])        # TODO: add <BEG>, <END>
+        tag_encoder = YEncoder([config.INS_TAG, config.EOS_TAG])
     else:
-        tagset = set(itertools.chain.from_iterable([r.orig_tags for r in raw_train]))
-        tagset = [config.BEG_TAG, config.END_TAG] + sorted(list(tagset))      # TODO: put into config and use config 
+        tagset = sorted(list(set(itertools.chain.from_iterable([r.orig_tags for r in raw_train])))) 
         tag_encoder = YEncoder(tagset)
         
     # Set up model
-    model = ModelFactory().get_new_model(logger, args, char_encoder, tag_encoder)
-    
-    # Load models if it was previously saved and want to continue
-#    if os.path.exists(model_path) and not args.need_train:
-#        model.load_state_dict(torch.load(os.path.join(model_path, "final.pt")))
-#        model.eval()
+    if args.start_from_epoch >= 0:
+        model = ModelFactory().get_trained_model(logger, args)
+    else:
+        model = ModelFactory().get_new_model(logger, args, char_encoder, tag_encoder)
     
     # Training
     # Step 1. Data preparation
-    training_data = lg_utils.get_data_from_samples(raw_train, char_encoder, tag_encoder)
-    cv_data = lg_utils.get_data_from_samples(raw_cv, char_encoder, tag_encoder)
-    print("Encoding done")
-    logger.info("Encoding done")
+    training_data = [(p.get_x(), p.get_y()) for p in raw_train]
+    cv_data = [(p.get_x(), p.get_y()) for p in raw_cv]
     
     # Step 2. Model training
     if args.need_train:
@@ -60,13 +54,7 @@ def train(logger, args):
     else:
         model = ModelFactory().get_trained_model(logger, args)
         
-    # Step 3. Evaluation with correct ratio
-    lg_utils.correct_ratio_calculation(raw_train, model, args, "train", char_encoder, tag_encoder, logger)
-    lg_utils.correct_ratio_calculation(raw_cv, model, args, "cv", char_encoder, tag_encoder, logger)
-    if args.task_type == "record":
-        lg_utils.tag_correct_ratio(raw_train, model, "train", char_encoder, tag_encoder, args, logger)
-        lg_utils.tag_correct_ratio(raw_cv, model, "cv", char_encoder, tag_encoder, args, logger)
-    
+        
 def test(logger, args):
     """
     Test trained model on set-alone data; this should be done after all tunings
@@ -80,12 +68,14 @@ def test(logger, args):
         lg_utils.tag_correct_ratio(raw_test, model, "test", 
                                    model.x_encoder, model.y_encoder, args, logger)
     
+    
 def produce(logger, args):
     """
     Produce untagged data using model; this step is unsupervised
     """
     # Step 1. using page_to_sent_model, parse pages to sentences
-    pages_produce = lg_utils.load_data_from_pickle("pages_produce.p", args.data_size)
+#    pages_produce = lg_utils.load_data_from_pickle("pages_produce.p", args.data_size)
+    pages_produce = lg_utils.load_data_from_pickle("pages_cv.p", args.data_size)
     
     # Step 2. depending on whether user wants to use RegEx/model, process page splitting
     if args.regex:
@@ -100,36 +90,28 @@ def produce(logger, args):
                                 p.txt):
                 tags[m.start(0)] = config.EOS_TAG  # no need to -1, instead drop '○' before name
             tags[-1] = config.EOS_TAG
-            tag_seq_list.append(tags)
+            tag_seq_list.append([config.BEG_TAG] + tags + [config.END_TAG])
     else:
         vars(args)["task_type"] = "page"
         page_model = ModelFactory().get_trained_model(logger, args)
-        # Data preparation
-        data = lg_utils.get_data_from_samples(pages_produce, page_model.x_encoder, page_model.y_encoder)
-        # Get results
-        tag_seq_list = page_model.evaluate_model(data, page_model.y_encoder)
+        pages_data = [p.get_x() for p in pages_produce]
+        tag_seq_list = page_model.evaluate_model(pages_data, args) # list of list of tag
             
     #   Step 3. using trained record model, tag each sentence
     # Get model
     vars(args)["task_type"] = "record"
     record_model = ModelFactory().get_trained_model(logger, args)
-    # TODO: allow diff model types for page and record in producing
-    # Prepare data
-    record_test_data = []
-    records = []
-    
-    # FIXME: this will be temporarily broken because get_sent_len_for_pages
-    # does not take care of <S> and </S> in page level properly
-    # We may also need to do similar fix in regex part
+    record_test_data = []       # list of list of str
+    records = []                # list of Record
     
     for p, pl in zip(pages_produce, 
                      lg_utils.get_sent_len_for_pages(tag_seq_list, config.EOS_TAG)):
-        rs = p.separate_sentence(pl)
+        rs = p.separate_sentence(pl)        # get a list of Record instances
         records.extend(rs)
-        record_test_data.extend([r.get_x(record_model.x_encoder) for r in rs])
+        record_test_data.extend([r.get_x() for r in rs])
         
     # Use trained model to process
-    tagged_sent = record_model.evaluate_model(record_test_data, record_model.y_encoder)
+    tagged_sent = record_model.evaluate_model(record_test_data, args)
     for record, tag_list in zip(records, tagged_sent):
         record.set_tag(tag_list)
         
@@ -139,6 +121,7 @@ def produce(logger, args):
         saver = HtmlSaver(records)
         filename = os.path.join(config.OUTPUT_PATH, "test_{}.txt".format(curr_time))
     else:
-        saver = ExcelSaver(records)
-        filename = os.path.join(config.OUTPUT_PATH, "test_{}.xlsx".format(curr_time))
+        raise ValueError("Unsupported save type: " + args.saver_type)
+#        saver = ExcelSaver(records)
+#        filename = os.path.join(config.OUTPUT_PATH, "test_{}.xlsx".format(curr_time))
     saver.save(filename, record_model.y_encoder.tag_dict.values())

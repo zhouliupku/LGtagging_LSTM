@@ -6,7 +6,8 @@ Created on Sun Oct 20 15:55:30 2019
 """
 
 import lg_utils
-from config import INS_TAG, EOS_TAG, BEG_TAG, END_TAG
+import config
+
 
 class Page(object):
     def __init__(self, pid, txt, eos_idx):
@@ -28,23 +29,20 @@ class Page(object):
             head_char_idx += sent_len
         return records
         
-    def get_x(self, encoder):
+    def get_x(self):
         """
-        get x sequence as tensor given encoder
+        get x sequence as list of str
         """
-        return encoder.encode(["<S>"] + list(self.txt) + ["</S>"])
+        return [config.BEG_CHAR] + list(self.txt) + [config.END_CHAR]
         
-    def get_y(self, encoder):
+    def get_y(self):
         """
-        get y sequence as tensor
+        get y sequence as list of tag char
         """
-        return encoder.encode(self.get_tag())
-    
-    def get_tag(self):
-        tags = [INS_TAG for i in range(len(self.txt))]
+        tags = [config.INS_TAG for i in range(len(self.txt))]
         for i in self.eos_idx:
-            tags[i] = EOS_TAG
-        return [BEG_TAG] + tags + [END_TAG]
+            tags[i] = config.EOS_TAG
+        return [config.BEG_TAG] + tags + [config.END_TAG]
     
     def get_sep_len(self):
         """
@@ -67,11 +65,12 @@ class Record(object):
         self.orig_text = txt        # as a string without <S>, </S>
         self.orig_tags = [None for i in txt] if tags is None else tags
         self.chars = [CharSample(c, t) for c, t in zip(self.orig_text, self.orig_tags)]
-        self.chars = [CharSample("<S>", BEG_TAG)] + self.chars
-        self.chars = self.chars + [CharSample("</S>", END_TAG)]
-#    
+        self.chars = [CharSample(config.BEG_CHAR, config.BEG_TAG)] + self.chars
+        self.chars = self.chars + [CharSample(config.END_CHAR, config.END_TAG)]
+
     def set_tag(self, tag_seq):
         """
+        tag_seq: list of tags, begin with BEG_TAG, ending with END_TAG
         """
         assert len(tag_seq) == len(self.chars)
         for i in range(1, len(tag_seq) - 1):
@@ -87,19 +86,16 @@ class Record(object):
             tag_res_dict[col_name] = keywords
         return tag_res_dict
         
-    def get_x(self, encoder):
+    def get_x(self):
         """
-        get x sequence as tensor
+        get x sequence as list of char
         """
-        return encoder.encode([cs.get_char() for cs in self.chars])
+        return [cs.get_char() for cs in self.chars]
         
-    def get_y(self, encoder):
+    def get_y(self):
         """
-        get y sequence as tensor
+        get y sequence as list of tag char
         """
-        return encoder.encode(self.get_tag())
-    
-    def get_tag(self):
         return [cs.get_tag() for cs in self.chars]
     
     def __str__(self):
@@ -119,4 +115,3 @@ class CharSample(object):
     
     def set_tag(self, tag):
         self.tag = tag
-
