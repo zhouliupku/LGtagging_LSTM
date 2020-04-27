@@ -132,51 +132,58 @@ def process_confusion_matrix(confusion_matrix, tag_idx):
     fp = confusion_matrix[:, tag_idx].sum() - tp
     fn = confusion_matrix[tag_idx, :].sum() - tp
     tn = confusion_matrix.sum() - tp - fp - fn
-    precision = tp / float(tp + fp)
-    recall = tp / float(tp + fn)
+    precision = 0 if tp + fp == 0 else tp / float(tp + fp)
+    recall = 0 if tp + fn == 0 else tp / float(tp + fn)
     accuracy = (tp + tn) / float(confusion_matrix.sum())
-    f_score = 2 / (1 / precision + 1 / recall)
+    f_score = 0 if precision == 0 or recall == 0 else 2 / (1 / precision + 1 / recall)
     return precision, recall, accuracy, f_score
 
 
 def process_confusion_matrix_macro(confusion_matrix, tag_to_idx,
                                    ignore_tags=[], weighted=True):
     #TODO: unit tests
-    precisions, recalls, accuracys, f_scores, weights = [], [], [], [], []
+    precisions, recalls, accuracys, weights = [], [], [], []
+#    idx_not_ignored = [tag_idx for tag_name, tag_idx in tag_to_idx.items() if tag_name not in ignore_tags]
     for tag_name, tag_idx in tag_to_idx.items():
         if tag_name in ignore_tags:
             continue
         weights.append(confusion_matrix[tag_idx, :].sum() if weighted else 1.0)
-        precision, recall, accuracy, f_score = process_confusion_matrix(confusion_matrix, tag_idx)
+        tp = confusion_matrix[tag_idx, tag_idx]
+        fp = confusion_matrix[:, tag_idx].sum() - tp
+        fn = confusion_matrix[tag_idx, :].sum() - tp
+        tn = confusion_matrix[:, :].sum() - tp - fp - fn
+        precision = 0 if tp + fp == 0 else tp / float(tp + fp)
+        recall = 0 if tp + fn == 0 else tp / float(tp + fn)
+        accuracy = (tp + tn) / float(tp + tn + fp + fn)
         precisions.append(precision)
         recalls.append(recall)
         accuracys.append(accuracy)
-        f_scores.append(f_score)
     
     precision_macro = nan_weighted_average(precisions, weights)
     recall_macro = nan_weighted_average(recalls, weights)
     accuracy_macro = nan_weighted_average(accuracys, weights)
-    f_score_macro = nan_weighted_average(f_scores, weights)
+    f_score_macro = 0 if precision_macro == 0 or recall_macro == 0 else 2 / (1 / precision_macro + 1 / recall_macro)
     return precision_macro, recall_macro, accuracy_macro, f_score_macro
 
 
 def process_confusion_matrix_micro(confusion_matrix, tag_to_idx, ignore_tags=[]):
     tps, fps, fns, tns = [], [], [], []
+#    idx_not_ignored = [tag_idx for tag_name, tag_idx in tag_to_idx.items() if tag_name not in ignore_tags]
     for tag_name, tag_idx in tag_to_idx.items():
         if tag_name in ignore_tags:
             continue
         tp = confusion_matrix[tag_idx, tag_idx]
         fp = confusion_matrix[:, tag_idx].sum() - tp
         fn = confusion_matrix[tag_idx, :].sum() - tp
-        tn = confusion_matrix.sum() - tp - fp - fn
+        tn = confusion_matrix[:, :].sum() - tp - fp - fn
         tps.append(tp)
         fps.append(fp)
         fns.append(fn)
         tns.append(tn)
-    precision = sum(tps) / float(sum(tps) + sum(fps))
-    recall = sum(tps) / float(sum(tps) + sum(fns))
+    precision = 0 if sum(tps) + sum(fps) == 0 else sum(tps) / float(sum(tps) + sum(fps))
+    recall = 0 if sum(tps) + sum(fns) == 0 else sum(tps) / float(sum(tps) + sum(fns))
     accuracy = (sum(tps) + sum(tns)) / float(sum(tps) + sum(fps) + sum(fns) + sum(tns))
-    f_score = 2 / (1 / precision + 1 / recall)
+    f_score = 0 if precision == 0 or recall == 0 else 2 / (1 / precision + 1 / recall)
     return precision, recall, accuracy, f_score
 
 
@@ -240,6 +247,7 @@ def is_collocated(c1, c2):
     
 def calc_entity_metrics(tag_pred, tag_true, tag_list):
     tag_to_idx = {t: i for i, t in enumerate(tag_list)}
+#    idx_not_ignore = [i for i, t in enumerate(tag_list) if t not in ignore_tags]
     n_dim = len(tag_list) + 1
     confusion_matrix = np.zeros([n_dim, n_dim])
     
@@ -274,10 +282,12 @@ def calc_entity_metrics(tag_pred, tag_true, tag_list):
     tp_plus_fp = confusion_matrix[:, :-1].sum()
     tp_plus_fn = confusion_matrix[:-1, :].sum()
     
-    precision = tp / float(tp_plus_fp)
-    recall = tp / float(tp_plus_fn)
+    print(confusion_matrix)
+    
+    precision = 0 if tp_plus_fp == 0 else tp / float(tp_plus_fp)
+    recall = 0 if tp_plus_fn == 0 else tp / float(tp_plus_fn)
     accuracy = (tp + 0) / float(confusion_matrix.sum())
-    f_score = 2 / (1 / precision + 1 / recall)
+    f_score = 0 if precision == 0 or recall == 0 else 2 / (1 / precision + 1 / recall)
     collocation_ratio = confusion_matrix[:-1, :-1].sum() / float(confusion_matrix.sum())
     return precision, recall, accuracy, f_score, collocation_ratio
 
