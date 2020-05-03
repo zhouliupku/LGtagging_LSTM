@@ -9,11 +9,11 @@ Load from unstructured data and produce datasets
 
 import os
 import pickle
-import itertools
 import numpy as np
 from bs4 import BeautifulSoup as BS
 
 import lg_utils
+import config
 from config import NULL_TAG, PADDING_CHAR, MAX_LEN
 from DataStructures import Page, Record
 
@@ -85,9 +85,11 @@ class DataLoader(object):
             
             for i, tag in enumerate(page_tags):
                 # EOS is the index just before a name' beginning
-                if i == 0 and tag == self.get_person_tag():
+                if i == 0 and tag == self.get_person_begin_tag():
                     continue
-                if tag == self.get_person_tag() and page_tags[i-1] != self.get_person_tag():
+                if tag == self.get_person_begin_tag() \
+                  and not self.is_person_tag(page_tags[i-1]):
+                    # avoid consecutive person names
                     eos_idx.append(i-1)
             eos_idx.append(len(txt)-1)
             page = Page(pid, txt, eos_idx)
@@ -103,10 +105,7 @@ class DataLoader(object):
                 
                 for tag in tags:          # None means take all
                     if (interested_tags is None) or (tag in interested_tags):
-                        if tag == "entry_addr":
-                            record_tag.append("biog_addr")
-                        else:
-                            record_tag.append(tag)
+                        record_tag.append(tag)
                     else:
                         record_tag.append(NULL_TAG)
                 records_in_page.append(Record(text, record_tag))
@@ -166,15 +165,35 @@ class DataLoader(object):
                 result.append(null_tag)
                 without_tag_item.append(rest_contents)
             X = ''.join([t.text for t in result])
-            Y = list(itertools.chain.from_iterable([[t.name] * len(t.text) for t in result]))
+            Y = lg_utils.concat_lists([self.get_bio(t) for t in result])
             
             # hierarchy: section -> page -> record -> char
             Xs.append(X)        # Xs is list of str, each str: record
             Ys.append(Y)        # Ys is list of list of tag
-        return ''.join(Xs), list(itertools.chain.from_iterable(Ys))
+        return ''.join(Xs), lg_utils.concat_lists(Ys)
     
-    def get_person_tag(self):
-        return "person"
+    
+    def get_bio(self, t):
+        """
+        input t: BS tag instance
+        output: BIO style tags as list of string
+        special treatment: due to historical reasons, entry_addr should be biog_addr
+        """
+        if len(t.text) == 0:
+            return []
+        elif t.name == NULL_TAG:
+            return [NULL_TAG] * len(t.text)
+        else:
+            tag_name = "biog_addr" if t.name == "entry_addr" else t.name
+            return [config.BEG_PREFIX + tag_name] + [config.IN_PREFIX + tag_name] * (len(t.text) - 1)
+    
+    
+    def get_person_begin_tag(self):
+        return config.BEG_PREFIX + "person"
+    
+    
+    def is_person_tag(self, tag):
+        return tag in [config.BEG_PREFIX + "person", config.IN_PREFIX + "person"]
 
 
 def dump_data_to_pickle(d, filename, size):
@@ -194,6 +213,7 @@ if __name__ == "__main__":
                            "post_type", "office", "entry_addr", "next_office",
                            "prev_office", "zi", "kins", "entry_time", "post_address",
                            "source_tag", "othername", "hao", "biog_addr"]
+        interested_tags = lg_utils.concat_lists([[config.BEG_PREFIX + t, config.IN_PREFIX + t] for t in interested_tags])
         
         data = loader.load_data(interested_tags, train_perc=0.6, cv_perc=0.2)
         dump_data_to_pickle(data[0], "pages_train.p", size)

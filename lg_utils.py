@@ -239,85 +239,87 @@ def output_entity_details(tag_pred, tag_true, inputs, mismatch_only=True):
     df.to_csv(os.path.join(config.OUTPUT_PATH, "entity_detail.csv"),
               encoding='utf-8-sig',
               index=False)
-    
-    
-def is_collocated(c1, c2):
-    return c1[0] == c2[0] and c1[1] == c2[1]
 
     
-def calc_entity_metrics(tag_pred, tag_true, tag_list):
-    tag_to_idx = {t: i for i, t in enumerate(tag_list)}
-#    idx_not_ignore = [i for i, t in enumerate(tag_list) if t not in ignore_tags]
-    n_dim = len(tag_list) + 1
-    confusion_matrix = np.zeros([n_dim, n_dim])
-    
+def calc_entity_metrics(tag_pred, tag_true):
+    """
+    Both tag_pred and tag_true are list of list of tag
+    calculate metrics based on exact match
+    """
+    sum_num_matched_chunk = 0
+    sum_num_true_chunk = 0
+    sum_num_pred_chunk = 0
     for ps, ts in zip(tag_pred, tag_true):
-        assert len(ps) == len(ts)
-        pcs = [c for c in get_cut(ps) if c[2] in tag_list]
-        tcs = [c for c in get_cut(ts) if c[2] in tag_list]
-        # Round 1: handle all pred cuts
-        for pc in pcs:
-            has_collocated = False
-            for tc in tcs:
-                if is_collocated(pc, tc):
-                    confusion_matrix[tag_to_idx[tc[2]], tag_to_idx[pc[2]]] += 1
-                    has_collocated = True
-                    break
-            # If no match after checking all tc, then increment last row of matrix
-            if not has_collocated:
-                confusion_matrix[n_dim - 1, tag_to_idx[pc[2]]] += 1
-        # Round 2: handle all true cuts without collocation
-        for tc in tcs:
-            for pc in pcs:
-                if is_collocated(pc, tc):
-                    # Don't increment here, to avoid double counting
-                    has_collocated = True
-                    break
-            # If no match after checking all pc, then increment last col of matrix
-            if not has_collocated:
-                confusion_matrix[tag_to_idx[tc[2]], n_dim - 1] += 1
-            
-    # calculate metrics, this is a generalization of micro metrics
-    tp = confusion_matrix.diagonal().sum()
-    tp_plus_fp = confusion_matrix[:, :-1].sum()
-    tp_plus_fn = confusion_matrix[:-1, :].sum()
-    
-    print(confusion_matrix)
-    
-    precision = 0 if tp_plus_fp == 0 else tp / float(tp_plus_fp)
-    recall = 0 if tp_plus_fn == 0 else tp / float(tp_plus_fn)
-    accuracy = (tp + 0) / float(confusion_matrix.sum())
-    f_score = 0 if precision == 0 or recall == 0 else 2 / (1 / precision + 1 / recall)
-    collocation_ratio = confusion_matrix[:-1, :-1].sum() / float(confusion_matrix.sum())
-    return precision, recall, accuracy, f_score, collocation_ratio
+        num_matched_chunk, num_true_chunk, num_pred_chunk = chunk_count(ps, ts)
+        sum_num_matched_chunk += num_matched_chunk
+        sum_num_true_chunk += num_true_chunk
+        sum_num_pred_chunk += num_pred_chunk
+        
+    precision = 0 if sum_num_pred_chunk == 0 else sum_num_matched_chunk / float(sum_num_pred_chunk)
+    recall = 0 if sum_num_true_chunk == 0 else sum_num_matched_chunk / float(sum_num_true_chunk)
+    if precision == 0 or recall == 0:
+        f_score = 0
+    else:
+        f_score = 2.0 / (1.0 / precision + 1.0 / recall)
+    return precision, recall, f_score
 
     
-def word_count(ps, ts):
+def chunk_count(ps, ts):
     """
-    given two lists of tags, count matched words and total words of the first list
-    both counts exclude special tags, i.e. BEG, END, etc
+    given two lists of tags, count matched words and total words of both lists
+    all counts exclude special tags, i.e. BEG, END, etc
+    With BIO style tags, consecutive O's is treated as chunks too
+    Tags with same type starting from B-tag_type followed by several I-tag_type
+    are treated as a chunk
+    In case of illegal sequence, following conll 2003
+        https://github.com/sighsmile/conlleval.git
+    treat I-tag_type without preceding B-tag_type or I-tag_type as B-tag_type
+    Return: num_matched_chunk, num_true_chunk, num_pred_chunk
     """
-    pred_cuts = [c for c in get_cut(ps) if c[2] not in config.special_tag_list]
-    true_cuts = get_cut(ts)
-    matches = [c for c in pred_cuts if c in true_cuts]
-    return len(matches), len(pred_cuts)
+    pred_chunk = get_chunk(ps)
+    true_chunk = get_chunk(ts)
+    matches = [c for c in pred_chunk if c in true_chunk]
+    return len(matches), len(true_chunk), len(pred_chunk)
     
     
-def get_cut(seq):
+def get_chunk(seq):
     """
-    triplets are (start_index, end_index, tag_type)
+    Chunk represented as triplets (start_index, end_index, tag_type)
+    Tags in config.special_tag_list are excluded in counts
     """
-    # TODO: see if other papers handle BEG, END, null tag
     if len(seq) == 0:
         return []
     triplets = []
-    start, last = 0, seq[0]
-    for i, x in enumerate(seq):
-        if x != last:
-            triplets.append((start, i, last))
-            start, last = i, x
-    triplets.append((start, len(seq), last))
-    return triplets   
+    start, last_chunk_type = 0, None
+    for i, tag in enumerate(seq):
+        # Cases where previous chunk is ended:
+        # 1. current tag is special tag
+        # 2. current tag type (ignoring B/I) is diff than prev chunk type
+        # 3. current tag prefix is B-, regardless of prev chunk type
+        tag_prefix, tag_type = parse_tag(tag)
+        if tag_type in config.special_tag_list:
+            if last_chunk_type is not None:
+                triplets.append((start, i, last_chunk_type))
+            last_chunk_type = None
+        elif tag_type != last_chunk_type or tag_prefix == config.BEG_PREFIX:
+            if last_chunk_type is not None:
+                triplets.append((start, i, last_chunk_type))
+            start, last_chunk_type = i, tag_type
+    if last_chunk_type is not None:     
+        triplets.append((start, len(seq), last_chunk_type))
+    return triplets
+
+
+def parse_tag(tag):
+    """
+    Helper function for parsing tag prefix and tag type from tag
+    """
+    if tag in config.special_tag_list:
+        return tag, tag
+    elif tag == config.NULL_TAG:
+        return tag, tag
+    else:
+        return tag[:config.BIO_PREFIX_LEN], tag[config.BIO_PREFIX_LEN:]
     
     
 def correct_ratio_calculation(samples, model, args, subset_name, logger):
