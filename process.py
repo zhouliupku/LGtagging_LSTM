@@ -74,8 +74,8 @@ def produce(logger, args):
     Produce untagged data using model; this step is unsupervised
     """
     # Step 1. using page_to_sent_model, parse pages to sentences
-#    pages_produce = lg_utils.load_data_from_pickle("pages_produce.p", args.data_size)
-    pages_produce = lg_utils.load_data_from_pickle("pages_cv.p", args.data_size)
+    pages_produce = lg_utils.load_data_from_pickle("pages_produce.p", args.data_size)
+#    pages_produce = lg_utils.load_data_from_pickle("pages_cv.p", args.data_size)
     
     # Step 2. depending on whether user wants to use RegEx/model, process page splitting
     if args.regex:

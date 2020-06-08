@@ -360,12 +360,14 @@ class ModelFactory(object):
         if not (args.use_cuda and torch.cuda.is_available()):
             model.load_state_dict(torch.load(model_filename,
                                              map_location=torch.device('cpu'))["model"])
+            model.optimizer.load_state_dict(torch.load(model_filename,
+                                             map_location=torch.device('cpu'))["optimizer"])
         else:
             model.load_state_dict(torch.load(model_filename,
                                              map_location=torch.device('cuda:0'))["model"])
+            model.optimizer.load_state_dict(torch.load(model_filename,
+                                             map_location=torch.device('cuda:0'))["optimizer"])
             model.cuda()
-            
-        model.optimizer.load_state_dict(torch.load(model_filename)["optimizer"])
         model.eval()
         self.setup_saving(model, args)
         return model
