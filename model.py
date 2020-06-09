@@ -365,9 +365,9 @@ class ModelFactory(object):
         else:
             model.load_state_dict(torch.load(model_filename,
                                              map_location=torch.device('cuda:0'))["model"])
+            model.cuda()
             model.optimizer.load_state_dict(torch.load(model_filename,
                                              map_location=torch.device('cuda:0'))["optimizer"])
-            model.cuda()
         model.eval()
         self.setup_saving(model, args)
         return model
