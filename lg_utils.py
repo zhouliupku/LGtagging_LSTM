@@ -187,60 +187,6 @@ def process_confusion_matrix_micro(confusion_matrix, tag_to_idx, ignore_tags=[])
     return precision, recall, accuracy, f_score
 
 
-def tag_correct_ratio(samples, model, subset_name, args, logger):
-    '''
-    Return entity-level correct ratio only for record model
-    '''
-    inputs = [(s.get_x(), s.get_y()) for s in samples]
-    tags = model.evaluate_model(inputs, args)  
-    tag_pred = [tag[0] for tag in tags]
-    tag_true = [tag[1] for tag in tags]
-#    sent_str = [tag[2] for tag in tags]
-    assert len(tag_pred) == len(tag_true)
-    for x, y in zip(tag_pred, tag_true):
-        assert len(x) == len(y)
-    correct_and_total_counts = [word_count(ps, ts) for ps, ts in zip(tag_pred, tag_true)]
-#    output_entity_details(tag_pred, tag_true, sent_str, mismatch_only=False)
-    entity_correct_ratio = sum([x[0] for x in correct_and_total_counts]) \
-                            / float(sum([x[1] for x in correct_and_total_counts]))
-    
-    # Log info of correct ratio
-    info_log = "Entity level correct ratio of {} set is {}".format(subset_name,
-                                                              entity_correct_ratio)
-    print(info_log)
-    logger.info(info_log)
-    
-    return entity_correct_ratio
-    
-
-def output_entity_details(tag_pred, tag_true, inputs, mismatch_only=True):
-    df = pd.DataFrame(columns=["word", "expected", "pred", "correct"])
-    assert len(inputs) == len(tag_pred)
-    assert len(inputs) == len(tag_true)
-    i_entity = 0
-    for sent, ps, ts in zip(inputs, tag_pred, tag_true):
-        i_entity += 1
-        if i_entity > config.MAX_ENTITY_RECORD:
-            break
-        assert len(sent) == len(ps)
-        assert len(sent) == len(ts)
-        true_cuts = get_cut(ts)
-        pred_cuts = get_cut(ps)
-        for tc in true_cuts:
-            if (not mismatch_only) or (tc not in pred_cuts):
-                start, end, tag_type = tc
-                if tag_type in config.special_tag_list:
-                    continue
-                df = df.append({"word": sent[start:end],
-                                "expected": ts[start:end],
-                                "pred": ps[start:end],
-                                "correct": tc in pred_cuts},
-                                ignore_index=True)
-    df.to_csv(os.path.join(config.OUTPUT_PATH, "entity_detail.csv"),
-              encoding='utf-8-sig',
-              index=False)
-
-    
 def calc_entity_metrics(tag_pred, tag_true):
     """
     Both tag_pred and tag_true are list of list of tag

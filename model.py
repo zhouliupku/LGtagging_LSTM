@@ -210,8 +210,7 @@ class Tagger(nn.Module):
         assert len(tag_pred) == len(tag_true)
         for x, y in zip(tag_pred, tag_true):
             assert len(x) == len(y)
-    #   TODO: lg_utils.output_entity_details(tag_pred, tag_true, sent_str, mismatch_only=False)
-                
+            
         # Log metrics
         precision, recall, f_score = lg_utils.calc_entity_metrics(tag_pred, tag_true)
         info_log = "Entity micro w/ null: P: {}, R: {}, F:{}".format(precision, recall, f_score)
