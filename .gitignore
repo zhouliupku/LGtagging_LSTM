@@ -9,3 +9,8 @@ log/
 plot/
 .idea/
 sandbox.py
+embed_guangyun.py
+shiyi_post_proc.py
+*.xlsx
+*.sh
+pybak/
