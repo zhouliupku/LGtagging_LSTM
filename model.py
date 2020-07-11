@@ -144,9 +144,9 @@ class Tagger(nn.Module):
 
             # Evaluate on both train and cv
             self.log_and_print("Train")
-            self.evaluate_core(batches_train)
+            self.evaluate_core(batches_train, args)
             self.log_and_print("CV")
-            self.evaluate_core(single_batches_cv)
+            self.evaluate_core(single_batches_cv, args)
                 
             # Save model snapshot
             self.save_model(self.save_path, epoch)
@@ -155,7 +155,7 @@ class Tagger(nn.Module):
         self.save_model(self.save_path, "_final")
         
         
-    def evaluate_core(self, batches):
+    def evaluate_core(self, batches, args):
         losses = []
         result_list = []
         with torch.no_grad():
@@ -180,71 +180,41 @@ class Tagger(nn.Module):
                 result_list.append((tags_pred, tags_true))
                 
         self.log_and_print("Loss = {}".format(np.mean(losses)))
-        self.calc_metric_char(result_list)
-        self.calc_correct_ratio_entity(result_list)
+        if args.task_type == "page":
+            self.calc_metric_char(result_list)
+        else:
+            self.calc_correct_ratio_entity(result_list)
         
     
     def calc_metric_char(self, tags):
-        # Both tag_pred and tag_true are list of list of tags
+        """
+        Both tag_pred and tag_true are list of list of tags; this is only for page model
+        """
         tag_pred = [tag[0] for tag in tags]
         tag_true = [tag[1] for tag in tags]
         assert len(tag_pred) == len(tag_true)
-                
-        if self.args.task_type == "page":    # only calculate the EOS tag for page model
-            tag_to_idx, confusion_matrix = lg_utils.prepare_confusion_matrix(tag_true, tag_pred,
-                                                                             [config.INS_TAG, config.EOS_TAG])
-            precision, recall, accuracy, f_score = lg_utils.process_confusion_matrix(confusion_matrix,
-                                                                                     tag_to_idx[config.EOS_TAG])
-            info_log = "P: {}, R: {}, A: {}, F: {}".format(precision, recall, accuracy, f_score)
-            self.log_and_print(info_log)
-            
-        else:       # ignore BEG, END etc for record model, although they are learned
-            tag_list = sorted(list(self.y_encoder.tag_dict.keys()))
-            tag_list = [t for t in tag_list if t not in config.special_tag_list]
-            tag_to_idx, confusion_matrix = lg_utils.prepare_confusion_matrix(tag_true, tag_pred, tag_list)
-                        
-            for avg_method in ["Micro", "Macro"]:
-                for include_null in [True, False]:
-                    ignore_set = [] if include_null else [config.NULL_TAG]
-                    if avg_method == "Micro":
-                        precision, recall, accuracy, f_score = \
-                            lg_utils.process_confusion_matrix_micro(confusion_matrix, tag_to_idx, ignore_set)
-                    else:
-                        precision, recall, accuracy, f_score = \
-                            lg_utils.process_confusion_matrix_macro(confusion_matrix, tag_to_idx, ignore_set)
-                    info_log = "{} {} null: P: {}, R: {}, A: {}, F: {}".format(avg_method,
-                                "w/" if include_null else "w/o",
-                                precision, recall, accuracy, f_score)
-                    self.log_and_print(info_log)
+        tag_to_idx, confusion_matrix = lg_utils.prepare_confusion_matrix(tag_true, tag_pred,
+                                                                         [config.INS_TAG, config.EOS_TAG])
+        precision, recall, accuracy, f_score = lg_utils.process_confusion_matrix(confusion_matrix,
+                                                                                 tag_to_idx[config.EOS_TAG])
+        info_log = "P: {}, R: {}, A: {}, F: {}".format(precision, recall, accuracy, f_score)
+        self.log_and_print(info_log)
             
     
     def calc_correct_ratio_entity(self, tags):
         '''
-        Return entity-level correct ratio only for record model
+        Calculate entity-level correct ratio only for record model
         '''
         tag_pred = [tag[0] for tag in tags]
         tag_true = [tag[1] for tag in tags]
         assert len(tag_pred) == len(tag_true)
         for x, y in zip(tag_pred, tag_true):
             assert len(x) == len(y)
-        correct_and_total_counts = [lg_utils.word_count(ps, ts) for ps, ts in zip(tag_pred, tag_true)]
-    #    lg_utils.output_entity_details(tag_pred, tag_true, sent_str, mismatch_only=False)
-        entity_correct_ratio = sum([x[0] for x in correct_and_total_counts]) \
-                                / float(sum([x[1] for x in correct_and_total_counts]))
-                
-        # Log info of correct ratio
-        info_log = "Entity level correct ratio is {}".format(entity_correct_ratio)
+            
+        # Log metrics
+        precision, recall, f_score = lg_utils.calc_entity_metrics(tag_pred, tag_true)
+        info_log = "Entity micro w/ null: P: {}, R: {}, F:{}".format(precision, recall, f_score)
         self.log_and_print(info_log)
-        
-        tag_list = sorted(list(self.y_encoder.tag_dict.keys()))
-        tag_list = [t for t in tag_list if t not in config.special_tag_list]
-        precision, recall, accuracy, f_score, collocation_ratio = \
-            lg_utils.calc_entity_metrics(tag_pred, tag_true, tag_list)
-        info_log = "Entity micro w/ null: P: {}, R: {}, A: {}, F: {}, C:{}"\
-            .format(precision, recall, accuracy, f_score, collocation_ratio)
-        self.log_and_print(info_log)
-        
-        return entity_correct_ratio
     
 
     def evaluate_model(self, test_data, args):
@@ -389,12 +359,14 @@ class ModelFactory(object):
         if not (args.use_cuda and torch.cuda.is_available()):
             model.load_state_dict(torch.load(model_filename,
                                              map_location=torch.device('cpu'))["model"])
+            model.optimizer.load_state_dict(torch.load(model_filename,
+                                             map_location=torch.device('cpu'))["optimizer"])
         else:
             model.load_state_dict(torch.load(model_filename,
                                              map_location=torch.device('cuda:0'))["model"])
             model.cuda()
-            
-        model.optimizer.load_state_dict(torch.load(model_filename)["optimizer"])
+            model.optimizer.load_state_dict(torch.load(model_filename,
+                                             map_location=torch.device('cuda:0'))["optimizer"])
         model.eval()
         self.setup_saving(model, args)
         return model

@@ -29,18 +29,18 @@ def train(logger, args):
     print("Loading done")
     logger.info("Loading done")
     
-    # Set up encoders
-    char_encoder = XEncoder(args)
-    if args.task_type == "page":
-        tag_encoder = YEncoder([config.INS_TAG, config.EOS_TAG])
-    else:
-        tagset = sorted(list(set(itertools.chain.from_iterable([r.orig_tags for r in raw_train])))) 
-        tag_encoder = YEncoder(tagset)
         
     # Set up model
     if args.start_from_epoch >= 0:
         model = ModelFactory().get_trained_model(logger, args)
     else:
+        # Set up encoders
+        char_encoder = XEncoder(args)
+        if args.task_type == "page":
+            tag_encoder = YEncoder([config.INS_TAG, config.EOS_TAG])
+        else:
+            tagset = sorted(list(set(itertools.chain.from_iterable([r.orig_tags for r in raw_train])))) 
+            tag_encoder = YEncoder(tagset)
         model = ModelFactory().get_new_model(logger, args, char_encoder, tag_encoder)
     
     # Training
@@ -61,12 +61,12 @@ def test(logger, args):
     """
     raw_test = lg_utils.load_data_from_pickle("{}s_test.p".format(args.task_type),
                                                args.data_size)
+    data = [(p.get_x(), p.get_y()) for p in raw_test]
     model = ModelFactory().get_trained_model(logger, args)
-    lg_utils.correct_ratio_calculation(raw_test, model, args, "test", 
-                                       model.x_encoder, model.y_encoder, logger)
-    if args.task_type == "record":
-        lg_utils.tag_correct_ratio(raw_test, model, "test", 
-                                   model.x_encoder, model.y_encoder, args, logger)
+    
+    single_batches = model.make_padded_batch(data, 1)
+    model.log_and_print("Test Evaluation")
+    model.evaluate_core(single_batches, args)
     
     
 def produce(logger, args):
@@ -74,8 +74,8 @@ def produce(logger, args):
     Produce untagged data using model; this step is unsupervised
     """
     # Step 1. using page_to_sent_model, parse pages to sentences
-#    pages_produce = lg_utils.load_data_from_pickle("pages_produce.p", args.data_size)
-    pages_produce = lg_utils.load_data_from_pickle("pages_cv.p", args.data_size)
+    pages_produce = lg_utils.load_data_from_pickle("pages_produce.p", args.data_size)
+#    pages_produce = lg_utils.load_data_from_pickle("pages_cv.p", args.data_size)
     
     # Step 2. depending on whether user wants to use RegEx/model, process page splitting
     if args.regex:

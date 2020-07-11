@@ -8,7 +8,10 @@ Created on Tue Nov 12 22:56:23 2019
 import os
 
 # For pre-processing
-NULL_TAG = "null"
+NULL_TAG = "O"
+BEG_PREFIX = "B-"
+IN_PREFIX = "I-"
+BIO_PREFIX_LEN = 2
 PADDING_CHAR = '○'
 
 # For x encoders
