@@ -1,0 +1,5 @@
+surname.txt
+record_model/*
+!record_model/small
+page_model/*
+!page_model/small

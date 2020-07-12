@@ -1,11 +1,8 @@
 LSTMdata/
-models/
 Embedding/
 __pycache__/
-result/
-data/
+
 logart_html/
-log/
 plot/
 .idea/
 sandbox.py
