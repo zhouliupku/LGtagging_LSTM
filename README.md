@@ -15,3 +15,14 @@ To evaluate trained model, use --process_type test, e.g.
 To produce tagged results from raw data, use existing models including both page model and record model, use --process_type produce, e.g.
 
     python main.py --process_type produce --model_alias bert --data_size small --model_type LSTMCRF --hidden_dim 64 --lstm_layer 2 --bidirectional T
+    
+## Input Directory
+
+LGtagging_LSTM-master/logart_html
+
+## Requirement
+
+torch
+
+
+
