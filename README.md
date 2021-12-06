@@ -18,7 +18,7 @@ To produce tagged results from raw data, use existing models including both page
     
 ## Input Directory
 
-LGtagging_LSTM-master/logart_html
+LGtagging_LSTM/logart_html
 
 ## Requirement
 
