@@ -26,4 +26,4 @@ torch
 
 pytorch-pretrained-bert
 
-
+pytorch-crf
