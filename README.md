@@ -24,5 +24,6 @@ LGtagging_LSTM/logart_html
 
 torch
 
+pytorch-pretrained-bert
 
 
