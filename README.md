@@ -4,7 +4,7 @@ A tagging system of local gazetteers by LSTM algorithms
 
 ## Download the Latest Version
 
-The model is too big, so we compressed and uploaded the whole folder to LGTaggingApp.zip https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/BWIBNL
+The model is too big, so we compressed and uploaded the whole folder to LGTaggingApp.7z https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/BWIBNL
 
 ## Usage
 
