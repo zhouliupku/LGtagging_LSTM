@@ -1,28 +1,37 @@
 # LGtagging_LSTM
 ## Introduction
+
 A tagging system of local gazetteers by LSTM algorithms
-
-## Download the Latest Version
-
-The model is too big, so we compressed and uploaded the whole folder to LGTaggingApp.7z https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/BWIBNL
 
 ## Usage
 
-To train, use --process_type train, e.g.
+1. Download the pre-trained model from: https://dataverse.harvard.edu/file.xhtml?fileId=6373866&version=DRAFT and decompress the model folder to the root, the directory looks like:
 
-    python main.py --process_type train --task_type record --n_epoch 100 --start_from_epoch -1 --learning_rate 0.000001 --need_train T --model_alias bert_1e-6_64 --hidden_dim 64 --lstm_layer 2 --bidirectional T --data_size small --main_encoder BERT --model_type LSTMCRF --batch_size 4
+data/
 
-To evaluate trained model, use --process_type test, e.g. 
+&ensp;\- page_model/
+ 
+&ensp;\- record_model/
+ 
+&ensp;\- default_x_encoder.p
 
-    python main.py --process_type test --task_type record --model_alias bert --hidden_dim 64 --lstm_layer 2 --bidirectional T --data_size small --main_encoder BERT --model_type LSTMCRF --batch_size 4
+log/
 
-To produce tagged results from raw data, use existing models including both page model and record model, use --process_type produce, e.g.
+models/
 
-    python main.py --process_type produce --model_alias bert --data_size small --model_type LSTMCRF --hidden_dim 64 --lstm_layer 2 --bidirectional T
+app.py
+
+config
+
+...
+
+2. Run
+
+python main.py
     
-## Input Directory
+## Input
 
-LGtagging_LSTM/logart_html
+LGtagging_LSTM/data/input.txt
 
 ## Requirement
 
@@ -33,3 +42,8 @@ pytorch-pretrained-bert
 pytorch-crf
 
 torchvision
+
+
+## Download the Latest Version
+
+The model is too big, so we compressed and uploaded the whole folder to LGTaggingApp.7z https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/BWIBNL

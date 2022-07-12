@@ -210,7 +210,8 @@ class Tagger(nn.Module):
         assert len(tag_pred) == len(tag_true)
         for x, y in zip(tag_pred, tag_true):
             assert len(x) == len(y)
-            
+    #   TODO: lg_utils.output_entity_details(tag_pred, tag_true, sent_str, mismatch_only=False)
+                
         # Log metrics
         precision, recall, f_score = lg_utils.calc_entity_metrics(tag_pred, tag_true)
         info_log = "Entity micro w/ null: P: {}, R: {}, F:{}".format(precision, recall, f_score)
@@ -321,7 +322,8 @@ class LSTMCRFTagger(LSTMTagger):
         
 class ModelFactory(object):
     def __init__(self):
-        self.model_root_path = os.path.join(os.getcwd(), "models")
+        root_path = os.path.dirname(os.path.abspath(__file__))
+        self.model_root_path = os.path.join(root_path, "models")
         
     def get_new_model(self, logger, args, x_encoder, y_encoder):
         if args.model_type == "LSTM":
@@ -338,7 +340,9 @@ class ModelFactory(object):
         model_path = self.format_path(args)
         if not os.path.isdir(model_path):
             raise FileNotFoundError("No such model!")
-        x_encoder = pickle.load(open(os.path.join(model_path, "x_encoder.p"), "rb"))
+            
+        # This is for app only, to reduce space requirement from x encoder
+        x_encoder = pickle.load(open(os.path.join(self.model_root_path, "default_x_encoder.p"), "rb"))
         y_encoder = pickle.load(open(os.path.join(model_path, "y_encoder.p"), "rb"))
         
         # Model type setup
@@ -364,9 +368,10 @@ class ModelFactory(object):
         else:
             model.load_state_dict(torch.load(model_filename,
                                              map_location=torch.device('cuda:0'))["model"])
-            model.cuda()
             model.optimizer.load_state_dict(torch.load(model_filename,
                                              map_location=torch.device('cuda:0'))["optimizer"])
+            model.cuda()
+            
         model.eval()
         self.setup_saving(model, args)
         return model
