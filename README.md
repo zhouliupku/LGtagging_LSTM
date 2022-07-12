@@ -42,8 +42,3 @@ pytorch-pretrained-bert
 pytorch-crf
 
 torchvision
-
-
-## Download the Latest Version
-
-The model is too big, so we compressed and uploaded the whole folder to LGTaggingApp.7z https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/BWIBNL
