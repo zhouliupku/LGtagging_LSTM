@@ -9,15 +9,15 @@ A tagging system of local gazetteers by LSTM algorithms
 
 data/
 
-&ensp;\- page_model/
- 
-&ensp;\- record_model/
- 
-&ensp;\- default_x_encoder.p
-
 log/
 
-models/
+**models/**
+
+**&ensp;\- page_model/**
+ 
+**&ensp;\- record_model/**
+ 
+**&ensp;\- default_x_encoder.p**
 
 app.py
 
@@ -27,7 +27,7 @@ config
 
 2. Run
 
-python main.py
+`python main.py`
     
 ## Input
 
