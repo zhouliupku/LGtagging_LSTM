@@ -1,0 +1,16 @@
+<person>郭治</person><jiguan>江西泰和</jiguan><entry_way>舉人</entry_way><post_time>二</post_time><post_time>年</post_time><post_type>任</post_type>陞<next_office>嵩明知州</next_office>見名宦
+<person>董傑</person><jiguan>南直贑榆</jiguan>人<entry_way>監生</entry_way><post_time>七</post_time><post_time>年</post_time><post_type>任</post_type>
+<person>王校</person><jiguan>江西泰和</jiguan><entry_way>舉人</entry_way><post_time>九</post_time><post_time>年</post_time><post_type>任</post_type>淸苦自持卒於官
+<person>鄧文憲</person><jiguan>廣東新會</jiguan><entry_way>舉人</entry_way><post_time>十一</post_time><post_time>年</post_time>以<prev_office>御史</prev_office>謫任陞<next_office>淮安同知</next_office>
+<person>胡崗</person><jiguan>南直蕪湖</jiguan>人<entry_way>監生</entry_way><post_time>十三</post_time><post_time>年</post_time><post_type>任</post_type>
+<person>傅錠</person>江西進賢<entry_way>舉人</entry_way><post_time>十四</post_time><post_time>年</post_time><post_type>任</post_type>
+<person>陰積</person><jiguan>福建</jiguan><entry_way>監生</entry_way><post_time>十五</post_time><post_time>年</post_time><post_type>任</post_type>
+<person>孫本</person><jiguan>通州</jiguan><entry_way>舉人</entry_way><post_time>十七</post_time><post_time>年</post_time><post_type>任</post_type>
+<person>陸經</person><jiguan>號西湖南直華亭</jiguan><entry_way>舉人</entry_way><post_time>二十二</post_time><post_time>年</post_time><post_type>任</post_type>
+<person>黃延年</person>廣東南海舉人二十三年任隆慶萬厯井一成<jiguan>建德</jiguan>人<entry_way>監生</entry_way><post_time>二十四</post_time><post_time>年</post_time><post_type>任</post_type>慷慨能詩文調<next_office>靖安縣知縣</next_office>
+<person>朱敬之</person><biog_addr>四川峽江</biog_addr><entry_way>舉人</entry_way><post_time>二十六</post_time><post_time>年</post_time><post_type>任</post_type>淸廉慈惠調廣東茂名縣知縣
+<person>林植</person>廣東東莞<entry_way>舉人</entry_way><post_time>二十九</post_time><post_time>年</post_time><post_type>任</post_type>陞<next_office>東平州知州
+</next_office>
+
+
+
