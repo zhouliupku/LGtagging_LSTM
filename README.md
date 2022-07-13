@@ -5,7 +5,7 @@ A tagging system of local gazetteers by LSTM algorithms
 
 ## Usage
 
-1. Download the pre-trained model from: https://dataverse.harvard.edu/file.xhtml?fileId=6373866&version=DRAFT and decompress the model folder to the root, the directory will look like:
+1. Download the pre-trained model from: https://dataverse.harvard.edu/file.xhtml?fileId=6373866&version=DRAFT and decompress the model folder to the root, your directory will look like:
 
 data/
 
